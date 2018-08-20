@@ -154,6 +154,8 @@ class X509Certificate(object):
     """
     Get certificate serial number
     Return: S_OK( serial )/S_ERROR
+
+    :warn:  This does not work. It sends rubish binary data.
     """
     if not self.__valid:
       return S_ERROR(DErrno.ENOCERT)

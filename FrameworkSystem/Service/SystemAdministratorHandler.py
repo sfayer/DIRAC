@@ -22,10 +22,7 @@ from DIRAC.Core.Utilities.Subprocess import shellCall, systemCall
 from DIRAC.Core.Utilities.ThreadScheduler import gThreadScheduler
 from DIRAC.Core.Utilities import Profiler
 from DIRAC.Core.Security.Locations import getHostCertificateAndKeyLocation
-if os.getenv('DIRAC_USE_M2CRYPTO', 'NO').lower() in ('yes', 'true'):
-  from DIRAC.Core.Security.m2crypto.X509Chain import X509Chain
-else:
-  from DIRAC.Core.Security.X509Chain import X509Chain
+from DIRAC.Core.Security.X509Chain import X509Chain
 from DIRAC.ConfigurationSystem.Client import PathFinder
 from DIRAC.ConfigurationSystem.Client.Helpers.CSGlobals import getCSExtensions
 from DIRAC.FrameworkSystem.Client.ComponentInstaller import gComponentInstaller

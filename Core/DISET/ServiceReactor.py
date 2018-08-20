@@ -36,8 +36,8 @@ from DIRAC.ConfigurationSystem.Client import PathFinder
 
 class ServiceReactor( object ):
 
-  __transportExtraKeywords = { 'SSLSessionTimeout' : False, 
-                               'IgnoreCRLs': False, 
+  __transportExtraKeywords = { 'SSLSessionTimeout' : False,
+                               'IgnoreCRLs': False,
                                'PacketTimeout': 'timeout' }
 
   def __init__( self ):
@@ -215,8 +215,3 @@ class ReactorStats:
 
   def connectionStablished( self ):
     self.__connections += 1
-
-
-
-
-

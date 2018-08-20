@@ -29,6 +29,8 @@ class CLIParams(object):
   userPasswd = ""
   checkClock = True
   embedDefaultGroup = True
+  rfc = True
+
 
   def setProxyLifeTime(self, arg):
     try:
@@ -37,6 +39,14 @@ class CLIParams(object):
     except:
       gLogger.error("Can't parse time! Is it a HH:MM?", arg)
       return S_ERROR("Can't parse time argument")
+    return S_OK()
+
+  def setRFC( self, _arg ):
+    self.rfc = True
+    return S_OK()
+
+  def setNoRFC( self, _arg ):
+    self.rfc = False
     return S_OK()
 
   def setProxyRemainingSecs(self, arg):
@@ -122,12 +132,12 @@ class CLIParams(object):
     Script.registerSwitch("p", "pwstdin", "Get passwd from stdin", self.setStdinPasswd)
     Script.registerSwitch("i", "version", "Print version", self.showVersion)
     Script.registerSwitch("j", "noclockcheck", "Disable checking if time is ok", self.disableClockCheck)
+    Script.registerSwitch( "r", "rfc", "Create an RFC proxy, true by default, deprecated flag", self.setRFC )
+    Script.registerSwitch( "L", "legacy", "Create a legacy non-RFC proxy", self.setNoRFC )
 
 
-if os.getenv('DIRAC_USE_M2CRYPTO', 'NO').lower() in ('yes', 'true'):
-  from DIRAC.Core.Security.m2crypto.X509Chain import X509Chain
-else:
-  from DIRAC.Core.Security.X509Chain import X509Chain
+
+from DIRAC.Core.Security.X509Chain import X509Chain
 from DIRAC.ConfigurationSystem.Client.Helpers import Registry
 from DIRAC.Core.Security import Locations
 
@@ -170,6 +180,8 @@ def generateProxy(params):
   timeLeft = testChain.getRemainingSecs()['Value'] / 86400
   if timeLeft < 30:
     gLogger.notice("\nYour certificate will expire in %d days. Please renew it!\n" % timeLeft)
+
+  # Here I am not sure why it was done differently so leave the switch for the time being
   if os.getenv('DIRAC_USE_M2CRYPTO', 'NO').lower() in ('yes', 'true'):
     passwdPrompt = "Enter Certificate password:"
     if params.stdinPasswd:
@@ -209,7 +221,8 @@ def generateProxy(params):
     retVal = chain.generateProxyToFile(proxyLoc,
                                        params.proxyLifeTime,
                                        strength=params.proxyStrength,
-                                       limited=params.limitedProxy)
+                                       limited=params.limitedProxy,
+                                       rfc = params.rfc)
 
     gLogger.info("Contacting CS...")
     retVal = Script.enableCS()
@@ -262,7 +275,8 @@ def generateProxy(params):
                                      params.proxyLifeTime,
                                      params.diracGroup,
                                      strength=params.proxyStrength,
-                                     limited=params.limitedProxy)
+                                     limited=params.limitedProxy,
+                                     rfc = params.rfc)
   if not retVal['OK']:
     gLogger.warn(retVal['Message'])
     return S_ERROR("Couldn't generate proxy: %s" % retVal['Message'])

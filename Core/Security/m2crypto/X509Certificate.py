@@ -4,34 +4,17 @@ __RCSID__ = "$Id$"
 
 import os
 import M2Crypto
-import asn1
 import datetime
+
 
 from DIRAC import S_OK, S_ERROR
 from DIRAC.Core.Utilities import Time
 from DIRAC.Core.Utilities import DErrno
+from DIRAC.Core.Security.m2crypto import DIRAC_GROUP_OID
 from DIRAC.ConfigurationSystem.Client.Helpers import Registry
+from DIRAC.Core.Security.m2crypto import asn1_utils
 
-# List of OIDs used in handling VOMS extension.
-# VOMS extension is encoded in ASN.1 format and it's surprisingly hard to decode. OIDs describe content of sections
-# of the data. There is no "official list of OIDs", ones used here are sourced from analysing VOMS extensions itself
-# and different pieces of code and presentations in subject of X509 certificates, certificate extensions and VOMS.
-# Googling names or values of those OIDs, especially VOMS related, usually result in up to three pages of results,
-# mainly Java code defining those values like code below.
-# This is literally lookup table, so I know WTH is this, when I read value and see '1.3.6.1.4.1.8005.100.100.4'.
-VOMS_EXTENSION_OID = '1.3.6.1.4.1.8005.100.100.5'
-VOMS_FQANS_OID = '1.3.6.1.4.1.8005.100.100.4'
-VOMS_GENERIC_ATTRS_OID = '1.3.6.1.4.1.8005.100.100.11'
-DOMAIN_COMPONENT_OID = '0.9.2342.19200300.100.1.25'
-ORGANIZATIONAL_UNIT_NAME_OID = '2.5.4.11'
-COMMON_NAME_OID = '2.5.4.3'
-LIMITED_PROXY_OID = '1.3.6.1.4.1.3536.1.1.1.9'
 
-DN_MAPPING = {
-    DOMAIN_COMPONENT_OID: '/DC=',
-    ORGANIZATIONAL_UNIT_NAME_OID: '/OU=',
-    COMMON_NAME_OID: '/CN='
-}
 
 
 class X509Certificate(object):
@@ -86,7 +69,7 @@ class X509Certificate(object):
     """
     try:
       self.__certObj = M2Crypto.X509.load_cert_string(str(pemData), M2Crypto.X509.FORMAT_PEM)
-    except Exception, e:
+    except Exception as e:
       return S_ERROR(DErrno.ECERTREAD, "Can't load pem data: %s" % e)
     self.__valid = True
     return S_OK()
@@ -120,7 +103,14 @@ class X509Certificate(object):
     """
     if not self.__valid:
       return S_ERROR(DErrno.ENOCERT)
-    return S_OK(self.__certObj.get_not_after())
+
+    notAfter = self.__certObj.get_not_after().get_datetime()
+
+    # M2Crypto does things correctly by setting a timezone info in the datetime
+    # However, we do not in DIRAC, and so we can't compare the dates.
+    # We have to remove the timezone info from M2Crypto
+    notAfter = notAfter.replace(tzinfo=None)
+    return S_OK(notAfter)
 
   def setNotAfter(self, notafter):
     """
@@ -139,7 +129,7 @@ class X509Certificate(object):
     """
     if not self.__valid:
       return S_ERROR(DErrno.ENOCERT)
-    return S_OK(self.__certObj.get_not_before())
+    return S_OK(self.__certObj.get_not_before().get_datetime())
 
   def setNotBefore(self, notbefore):
     """
@@ -265,11 +255,17 @@ class X509Certificate(object):
     """
     if not self.__valid:
       return S_ERROR(DErrno.ENOCERT)
-    extCount = self.__certObj.get_ext_count()
-    for extIdx in xrange(extCount):
-      ext = self.__certObj.get_ext_at(extIdx)
-      if ext.get_name() == "diracGroup":
-        return S_OK(ext.get_value())
+    try:
+      return S_OK(asn1_utils.decodeDIRACGroup(self.__certObj))
+    except LookupError:
+      pass
+
+    # extCount = self.__certObj.get_ext_count()
+    # for extIdx in xrange(extCount):
+    #
+    #   ext = self.__certObj.get_ext_at(extIdx)
+    #   if ext.get_name() == "diracGroup":
+    #     return S_OK(ext.get_value())
     if ignoreDefault:
       return S_OK(False)
     result = self.getIssuerDN()
@@ -296,13 +292,19 @@ class X509Certificate(object):
     """
     Get voms extensions
     """
-    decoder = asn1.Decoder()
-    decoder.start(self.__certObj.as_der())
-    data = parseForVOMS(decoder)
-    if data:
-      return S_OK(data)
-    else:
+    try:
+      vomsExt =  asn1_utils.decodeVOMSExtension(self.__certObj)
+      return S_OK(vomsExt)
+    except LookupError :
       return S_ERROR(DErrno.EVOMS, "No VOMS data available")
+    #
+    # decoder = asn1.Decoder()
+    # decoder.start(self.__certObj.as_der())
+    # data = parseForVOMS(decoder)
+    # if data:
+    #   return S_OK(data)
+    # else:
+    #   return S_ERROR(DErrno.EVOMS, "No VOMS data available")
 
   def generateProxyRequest(self, bitStrength=1024, limited=False):
     """
@@ -342,7 +344,7 @@ class X509Certificate(object):
     if not self.__valid:
       return S_ERROR(DErrno.ENOCERT)
     extList = []
-    for i in self.__certObj.get_ext_count():
+    for i in xrange(self.__certObj.get_ext_count()):
       sn = self.__certObj.get_ext_at(i).get_name()
       try:
         value = self.__certObj.get_ext_at(i).get_value()
@@ -354,9 +356,11 @@ class X509Certificate(object):
   def verify(self, pkey):
     """
     Verify certificate using provided key
+
+    :returns: S_OK(bool) where the boolean shows the success of the verification
     """
     ret = self.__certObj.verify(pkey)
-    return S_OK(ret)
+    return S_OK(ret == 1)
 
   def setSubject(self, subject):
     """
@@ -399,141 +403,143 @@ class X509Certificate(object):
     self.__certObj.add_ext(extension)
     return S_OK()
 
-# utility functions for handling VOMS Extension
+# # utility functions for handling VOMS Extension
+#
+#
+# def extract_DN(inp):
+#   """
+#   Return DN extracted from given ASN.1 decoder
+#   """
+#   while not inp.peek().nr == asn1.Numbers.Set:  # looking for the sequence of sets, so if set is next, we're here
+#     inp = enterSequence(inp)
+#   dn = ""
+#   while inp.peek():  # each set has OID and value
+#     inp.enter()
+#     inp.enter()
+#     _, oid = inp.read()
+#     _, value = inp.read()
+#     dn += DN_MAPPING[oid]
+#     dn += value
+#     inp.leave()
+#     inp.leave()
+#   return dn
+#
+#
+# def enterSequence(seq, levels=1):
+#   """
+#   Enter sequence in ASN.1 decoder
+#   """
+#   while levels:
+#     tag = seq.peek()
+#     if not tag.typ == asn1.Types.Constructed:
+#       return seq
+#     seq.enter()
+#     levels -= 1
+#   return seq
+#
+#
+# def leaveSequence(inp):
+#   """
+#   Leave sequence in ASN.1 decoder. Leaves all nested sequences if there are no more values to read
+#   """
+#   while not inp.peek():
+#     inp.leave()
+#   return inp
 
 
-def extract_DN(inp):
-  """
-  Return DN extracted from given ASN.1 decoder
-  """
-  while not inp.peek().nr == asn1.Numbers.Set:  # looking for the sequence of sets, so if set is next, we're here
-    inp = enterSequence(inp)
-  dn = ""
-  while inp.peek():  # each set has OID and value
-    inp.enter()
-    inp.enter()
-    _, oid = inp.read()
-    _, value = inp.read()
-    dn += DN_MAPPING[oid]
-    dn += value
-    inp.leave()
-    inp.leave()
-  return dn
-
-
-def enterSequence(seq, levels=1):
-  """
-  Enter sequence in ASN.1 decoder
-  """
-  while levels:
-    tag = seq.peek()
-    if not tag.typ == asn1.Types.Constructed:
-      return seq
-    seq.enter()
-    levels -= 1
-  return seq
-
-
-def leaveSequence(inp):
-  """
-  Leave sequence in ASN.1 decoder. Leaves all nested sequences if there are no more values to read
-  """
-  while not inp.peek():
-    inp.leave()
-  return inp
-
-
-def parseForVOMS(inp):
-  """
-  Parse ASN.1 encoded X509 Extension. Recursively looks for VOMS extension.
-  """
-  while not inp.eof():
-    tag = inp.peek()
-    if tag.typ == asn1.Types.Primitive:
-      tag, value = inp.read()
-      if tag.nr == asn1.Numbers.ObjectIdentifier and value == VOMS_EXTENSION_OID:  # we have our voms
-        voms_decoder = asn1.Decoder()
-        _, value = inp.read()
-        voms_decoder.start(value)
-        data = processVOMSExtension(voms_decoder)
-        return data
-      else:
-        pass
-        # we don't care about other extensions, but I wanted to make it clear, that's why "else: pass", sorry not sorry
-    elif tag.typ == asn1.Types.Constructed:
-      inp.enter()
-      data = parseForVOMS(inp)
-      if data:
-        return data
-      inp.leave()
-
-
-def processVOMSExtension(inp):
-  """
-  Extact VOMS information from ASN.1 decoder containing VOMS extension
-  """
-  data = {}
-
-  # we have sequential access, no random access, only way to advance is to read
-  while inp.peek().nr == asn1.Numbers.Sequence:
-    inp = enterSequence(inp)  # get one level deeper
-  inp.read()  # skippinng, this is not value we are looking for
-  data['subject'] = extract_DN(inp)
-
-  # jump back to level, where there is something to read
-  inp = leaveSequence(inp)
-  inp.read()  # there is one more value in this sequence, but we don't care
-  inp = leaveSequence(inp)
-  data['issuer'] = extract_DN(inp)
-
-  inp = leaveSequence(inp)
-  # skipping two fields
-  inp.read()
-  inp.read()
-
-  inp.enter()
-  _, notBefore = inp.read()
-  _, notAfter = inp.read()
-  data['notBefore'] = datetime.datetime.strptime(notBefore[:-1], '%Y%m%d%H%M%S')
-  data['notAfter'] = datetime.datetime.strptime(notAfter[:-1], '%Y%m%d%H%M%S')
-
-  fqan = []
-  inp = leaveSequence(inp)
-
-  while not inp.peek().nr == asn1.Numbers.ObjectIdentifier:
-    inp = enterSequence(inp)
-
-  if inp.peek().nr == asn1.Numbers.ObjectIdentifier:
-    _, value = inp.read()
-    if value == VOMS_FQANS_OID:
-      while inp.peek().nr == asn1.Numbers.Set:
-        inp = enterSequence(inp)
-      inp = enterSequence(inp)
-      inp.read()  # skipping
-      inp = enterSequence(inp)
-      _, value = inp.read()
-      fqan.append(value.decode('utf-8'))
-      _, value = inp.read()
-      fqan.append(value.decode('utf-8'))
-      data['fqan'] = fqan
-
-  inp = leaveSequence(inp)
-  inp = enterSequence(inp, 2)
-  _, value = inp.read()
-  if value == VOMS_GENERIC_ATTRS_OID:
-    dec = asn1.Decoder()
-    _, vv = inp.read()
-    dec.start(vv)
-    dec = enterSequence(dec, 3)
-    dec.read()  # skipping
-    dec = enterSequence(dec, 2)
-    _, name = dec.read()
-    _, value = dec.read()
-    _, aux = dec.read()
-
-    data['attribute'] = "%s = %s (%s)" % (name.decode('utf-8'), value.decode('utf-8'), aux.decode('utf-8'))
-    data['vo'] = aux.decode('utf-8')
-
-  if 'vo' not in data and 'fqan' in data:
-    data['vo'] = fqan[0].split('/')[1]
-  return data
+#https://www.ogf.org/documents/GFD.182.pdf
+#
+# def parseForVOMS(inp):
+#   """
+#   Parse ASN.1 encoded X509 Extension. Recursively looks for VOMS extension.
+#   """
+#   while not inp.eof():
+#     tag = inp.peek()
+#     if tag.typ == asn1.Types.Primitive:
+#       tag, value = inp.read()
+#       if tag.nr == asn1.Numbers.ObjectIdentifier and value == VOMS_EXTENSION_OID:  # we have our voms
+#         voms_decoder = asn1.Decoder()
+#         _, value = inp.read()
+#         voms_decoder.start(value)
+#         data = processVOMSExtension(voms_decoder)
+#         return data
+#       else:
+#         pass
+#         # we don't care about other extensions, but I wanted to make it clear, that's why "else: pass", sorry not sorry
+#     elif tag.typ == asn1.Types.Constructed:
+#       inp.enter()
+#       data = parseForVOMS(inp)
+#       if data:
+#         return data
+#       inp.leave()
+#
+#
+# def processVOMSExtension(inp):
+#   """
+#   Extact VOMS information from ASN.1 decoder containing VOMS extension
+#   """
+#   data = {}
+#
+#   # we have sequential access, no random access, only way to advance is to read
+#   while inp.peek().nr == asn1.Numbers.Sequence:
+#     inp = enterSequence(inp)  # get one level deeper
+#   inp.read()  # skippinng, this is not value we are looking for
+#   data['subject'] = extract_DN(inp)
+#
+#   # jump back to level, where there is something to read
+#   inp = leaveSequence(inp)
+#   inp.read()  # there is one more value in this sequence, but we don't care
+#   inp = leaveSequence(inp)
+#   data['issuer'] = extract_DN(inp)
+#
+#   inp = leaveSequence(inp)
+#   # skipping two fields
+#   inp.read()
+#   inp.read()
+#
+#   inp.enter()
+#   _, notBefore = inp.read()
+#   _, notAfter = inp.read()
+#   data['notBefore'] = datetime.datetime.strptime(notBefore[:-1], '%Y%m%d%H%M%S')
+#   data['notAfter'] = datetime.datetime.strptime(notAfter[:-1], '%Y%m%d%H%M%S')
+#
+#   fqan = []
+#   inp = leaveSequence(inp)
+#
+#   while not inp.peek().nr == asn1.Numbers.ObjectIdentifier:
+#     inp = enterSequence(inp)
+#
+#   if inp.peek().nr == asn1.Numbers.ObjectIdentifier:
+#     _, value = inp.read()
+#     if value == VOMS_FQANS_OID:
+#       while inp.peek().nr == asn1.Numbers.Set:
+#         inp = enterSequence(inp)
+#       inp = enterSequence(inp)
+#       inp.read()  # skipping
+#       inp = enterSequence(inp)
+#       _, value = inp.read()
+#       fqan.append(value.decode('utf-8'))
+#       _, value = inp.read()
+#       fqan.append(value.decode('utf-8'))
+#       data['fqan'] = fqan
+#
+#   inp = leaveSequence(inp)
+#   inp = enterSequence(inp, 2)
+#   _, value = inp.read()
+#   if value == VOMS_TAGS_EXT_OID:
+#     dec = asn1.Decoder()
+#     _, vv = inp.read()
+#     dec.start(vv)
+#     dec = enterSequence(dec, 3)
+#     dec.read()  # skipping
+#     dec = enterSequence(dec, 2)
+#     _, name = dec.read()
+#     _, value = dec.read()
+#     _, aux = dec.read()
+#
+#     data['attribute'] = "%s = %s (%s)" % (name.decode('utf-8'), value.decode('utf-8'), aux.decode('utf-8'))
+#     data['vo'] = aux.decode('utf-8')
+#
+#   if 'vo' not in data and 'fqan' in data:
+#     data['vo'] = fqan[0].split('/')[1]
+#   return data

@@ -8,12 +8,8 @@ from DIRAC.Core.Utilities import ThreadSafe, DIRACSingleton
 from DIRAC.Core.Utilities.DictCache import DictCache
 from DIRAC.Core.Security import Locations, CS
 from DIRAC.Core.Security.ProxyFile import multiProxyArgument, deleteMultiProxy
-if os.getenv('DIRAC_USE_M2CRYPTO', 'NO').lower() in ('yes', 'true'):
-  from DIRAC.Core.Security.m2crypto.X509Chain import X509Chain, g_X509ChainType
-  from DIRAC.Core.Security.m2crypto.X509Request import X509Request
-else:
-  from DIRAC.Core.Security.X509Chain import X509Chain, g_X509ChainType
-  from DIRAC.Core.Security.X509Request import X509Request
+from DIRAC.Core.Security.X509Chain import X509Chain, g_X509ChainType
+from DIRAC.Core.Security.X509Request import X509Request
 from DIRAC.Core.Security.VOMS import VOMS
 from DIRAC.Core.DISET.RPCClient import RPCClient
 
@@ -128,7 +124,7 @@ class ProxyManagerClient(object):
                             record)
     return retVal
 
-  def uploadProxy(self, proxy=False, diracGroup=False, chainToConnect=False, restrictLifeTime=0):
+  def uploadProxy(self, proxy=False, diracGroup=False, chainToConnect=False, restrictLifeTime=0, rfcIfPossible = False):
     """
     Upload a proxy to the proxy management service using delegation
     """
@@ -176,7 +172,8 @@ class ProxyManagerClient(object):
       chainLifeTime = restrictLifeTime
     retVal = chain.generateChainFromRequestString(reqDict['request'],
                                                   lifetime=chainLifeTime,
-                                                  diracGroup=diracGroup)
+                                                  diracGroup=diracGroup,
+                                                  rfc = rfcIfPossible)
     if not retVal['OK']:
       return retVal
     # Upload!

@@ -7,10 +7,7 @@ import base64
 
 from DIRAC import S_OK, S_ERROR
 from DIRAC.Core.Utilities import DErrno
-if os.getenv('DIRAC_USE_M2CRYPTO', 'NO').lower() in ('yes', 'true'):
-  from DIRAC.Core.Security.m2crypto.X509Chain import X509Chain, g_X509ChainType
-else:
-  from DIRAC.Core.Security.X509Chain import X509Chain, g_X509ChainType
+from DIRAC.Core.Security.X509Chain import X509Chain, g_X509ChainType
 from DIRAC.Core.Security.VOMS import VOMS
 from DIRAC.Core.Security import Locations
 
@@ -96,7 +93,7 @@ def formatProxyInfoAsString(infoDict):
   leftAlign = 13
   contentList = []
   for field in ('subject', 'issuer', 'identity', 'subproxyUser', ('secondsLeft', 'timeleft'),
-                ('group', 'DIRAC group'), 'path', 'username', ('groupProperties', "properties"),
+                ('group', 'DIRAC group'), 'rfc', 'path', 'username', ('groupProperties', "properties"),
                 ('hasVOMS', 'VOMS'), ('VOMS', 'VOMS fqan'), ('VOMSError', 'VOMS Error')):
     if isinstance(field, basestring):
       dispField = field

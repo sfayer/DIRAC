@@ -70,6 +70,8 @@ import platform as pyPlatform
 from pkgutil import extend_path
 __path__ = extend_path( __path__, __name__ )
 
+# Set the environment variable such that openssl accepts proxy cert
+os.environ['OPENSSL_ALLOW_PROXY_CERTS'] = "True"
 
 __RCSID__ = "$Id$"
 

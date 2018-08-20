@@ -9,10 +9,7 @@ import tempfile
 
 from DIRAC import S_OK, S_ERROR
 from DIRAC.Core.Utilities import DErrno
-if os.getenv('DIRAC_USE_M2CRYPTO', 'NO').lower() in ('yes', 'true'):
-  from DIRAC.Core.Security.m2crypto.X509Chain import X509Chain, g_X509ChainType
-else:
-  from DIRAC.Core.Security.X509Chain import X509Chain, g_X509ChainType
+from DIRAC.Core.Security.X509Chain import X509Chain, g_X509ChainType
 from DIRAC.Core.Security.Locations import getProxyLocation
 
 def writeToProxyFile( proxyContents, fileName = False ):
@@ -86,13 +83,13 @@ def multiProxyArgument( proxy = False ):
 
 
   :param proxy: param can be:
-  
+
       * Default -> use current proxy
       * string -> upload file specified as proxy
       * X509Chain -> use chain
 
   :returns:  S_OK/S_ERROR
-  
+
     .. code-block:: python
 
         S_OK( { 'file' : <string with file location>,

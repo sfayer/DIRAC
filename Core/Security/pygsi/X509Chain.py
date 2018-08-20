@@ -13,7 +13,7 @@ from GSI import crypto
 
 from DIRAC import S_OK, S_ERROR
 from DIRAC.Core.Utilities import DErrno
-from DIRAC.Core.Security.X509Certificate import X509Certificate, LIMITED_PROXY_OID
+from DIRAC.Core.Security.pygsi.X509Certificate import X509Certificate, LIMITED_PROXY_OID
 from DIRAC.ConfigurationSystem.Client.Helpers import Registry
 
 random.seed()
@@ -26,12 +26,13 @@ class X509Chain(object):
   def __getPass(self):
     return self.__pass
 
-  __validExtensionValueTypes = (basestring, )
+  __validExtensionValueTypes = (basestring,)
 
   def __init__(self, certList=False, keyObj=False):
     self.__isProxy = False
     self.__firstProxyStep = 0
     self.__isLimitedProxy = True
+    self.__isRFC = False
     self.__hash = False
     if certList:
       self.__loadedChain = True
@@ -150,7 +151,7 @@ class X509Chain(object):
       return retVal
     return self.loadKeyFromString(pemData)
 
-  def __getProxyExtensionList(self, diracGroup=False, limited=False):
+  def __getProxyExtensionList(self, diracGroup=False, rfc=False, rfcLimited=False):
     """
     Get the list of extensions for a proxy
     """
@@ -159,8 +160,9 @@ class X509Chain(object):
                                         'critical, digitalSignature, keyEncipherment, dataEncipherment'))
     if diracGroup and isinstance(diracGroup, self.__validExtensionValueTypes):
       extList.append(crypto.X509Extension('diracGroup', diracGroup))
-    if limited:
-      asn1Obj = crypto.ASN1([[LIMITED_PROXY_OID]])
+    if rfc or rfcLimited:
+      blob = [["1.3.6.1.5.5.7.21.1"]] if not rfcLimited else [[LIMITED_PROXY_OID]]
+      asn1Obj = crypto.ASN1(blob)
       asn1Obj[0][0].convert_to_object()
       asn1dump = binascii.hexlify(asn1Obj.dump())
       extval = "critical,DER:" + ":".join(asn1dump[i:i + 2] for i in range(0, len(asn1dump), 2))
@@ -184,8 +186,8 @@ class X509Chain(object):
       return S_ERROR(DErrno.ENOCHAIN)
     if self.__isProxy:
       return S_OK(X509Certificate(self.__certList[self.__firstProxyStep + 1]))
-    else:
-      return S_OK(X509Certificate(self.__certList[-1]))
+
+    return S_OK(X509Certificate(self.__certList[-1]))
 
   def getPKeyObj(self):
     """
@@ -211,7 +213,7 @@ class X509Chain(object):
       return S_ERROR(DErrno.ENOCHAIN)
     return S_OK(len(self.__certList))
 
-  def generateProxyToString(self, lifeTime, diracGroup=False, strength=1024, limited=False, proxyKey=False):
+  def generateProxyToString(self, lifeTime, diracGroup=False, strength=1024, limited=False, rfc=False, proxyKey=False):
     """
     Generate a proxy and get it as a string
 
@@ -227,19 +229,32 @@ class X509Chain(object):
     if not self.__loadedPKey:
       return S_ERROR(DErrno.ENOPKEY)
 
+    if self.__isProxy:
+      rfc = self.isRFC().get('Value', False)
+
     issuerCert = self.__certList[0]
 
     if not proxyKey:
       proxyKey = crypto.PKey()
       proxyKey.generate_key(crypto.TYPE_RSA, strength)
 
-    proxyCert = X509Certificate()
+    proxyCert = crypto.X509()
 
-    proxyCert.set_serial_number(str(int(random.random() * 10 ** 10)))
-    cloneSubject = issuerCert.get_subject().clone()
-    cloneSubject.insert_entry("CN", str(int(random.random() * 10 ** 10)))
-    proxyCert.set_subject(cloneSubject)
-    proxyCert.add_extensions(self.__getProxyExtensionList(diracGroup, limited))
+    if rfc:
+      proxyCert.set_serial_number(str(int(random.random() * 10 ** 10)))
+      cloneSubject = issuerCert.get_subject().clone()
+      cloneSubject.insert_entry("CN", str(int(random.random() * 10 ** 10)))
+      proxyCert.set_subject(cloneSubject)
+      proxyCert.add_extensions(self.__getProxyExtensionList(diracGroup, rfc and not limited, rfc and limited))
+    else:
+      proxyCert.set_serial_number(issuerCert.get_serial_number())
+      cloneSubject = issuerCert.get_subject().clone()
+      if limited:
+        cloneSubject.insert_entry("CN", "limited proxy")
+      else:
+        cloneSubject.insert_entry("CN", "proxy")
+      proxyCert.set_subject(cloneSubject)
+      proxyCert.add_extensions(self.__getProxyExtensionList(diracGroup))
 
     proxyCert.set_issuer(issuerCert.get_subject())
     proxyCert.set_version(issuerCert.get_version())
@@ -255,7 +270,7 @@ class X509Chain(object):
 
     return S_OK(proxyString)
 
-  def generateProxyToFile(self, filePath, lifeTime, diracGroup=False, strength=1024, limited=False):
+  def generateProxyToFile(self, filePath, lifeTime, diracGroup=False, strength=1024, limited=False, rfc=False):
     """
     Generate a proxy and put it into a file
 
@@ -266,7 +281,7 @@ class X509Chain(object):
         strength: length in bits of the pair
         limited: Create a limited proxy
     """
-    retVal = self.generateProxyToString(lifeTime, diracGroup, strength, limited)
+    retVal = self.generateProxyToString(lifeTime, diracGroup, strength, limited, rfc)
     if not retVal['OK']:
       return retVal
     try:
@@ -347,6 +362,7 @@ class X509Chain(object):
     self.__hash = False
     self.__firstProxyStep = len(self.__certList) - 2  # -1 is user cert by default, -2 is first proxy step
     self.__isProxy = True
+    self.__isRFC = None
     self.__isLimitedProxy = False
     prevDNMatch = 2
     # If less than 2 steps in the chain is no proxy
@@ -387,6 +403,7 @@ class X509Chain(object):
      1 = proxy match
      2 = limited proxy match
     """
+
     issuerSubject = self.__certList[issuerStep].get_subject()
     proxySubject = self.__certList[certStep].get_subject().clone()
     psEntries = proxySubject.num_entries()
@@ -402,9 +419,13 @@ class X509Chain(object):
                        if line.split(":")[0] == "Path Length Constraint"]
           if not contraint:
             return 0
+          if self.__isRFC is None:
+            self.__isRFC = True
           if contraint[0] == LIMITED_PROXY_OID:
             limited = True
     else:
+      if self.__isRFC is None:
+        self.__isRFC = False
       if lastEntry[1] == "limited proxy":
         limited = True
     proxySubject.remove_entry(psEntries - 1)
@@ -452,6 +473,7 @@ class X509Chain(object):
   def getNotAfterDate(self):
     """
     Get the smallest not after date
+    Does not return the smallest limitation
     """
     if not self.__loadedChain:
       return S_ERROR(DErrno.ENOCHAIN)
@@ -476,7 +498,7 @@ class X509Chain(object):
     x509 = self.getCertInChain(0)['Value']
     return x509.generateProxyRequest(bitStrength, limited)
 
-  def generateChainFromRequestString(self, pemData, lifetime=86400, requireLimited=False, diracGroup=False):
+  def generateChainFromRequestString(self, pemData, lifetime=86400, requireLimited=False, diracGroup=False, rfc=True):
     """
     Generate a x509 chain from a request
     return S_OK( string ) / S_ERROR
@@ -490,7 +512,7 @@ class X509Chain(object):
     except Exception as e:
       return S_ERROR(DErrno.ECERTREAD, "Can't load request data: %s" % repr(e).replace(',)', ')'))
     limited = requireLimited and self.isLimitedProxy().get('Value', False)
-    return self.generateProxyToString(lifetime, diracGroup, 1024, limited, req.get_pubkey())
+    return self.generateProxyToString(lifetime, diracGroup, 1024, limited, rfc, req.get_pubkey())
 
   def getRemainingSecs(self):
     """
@@ -540,6 +562,11 @@ class X509Chain(object):
     except Exception as e:
       return S_ERROR(DErrno.ESPF, "%s :%s" % (filename, repr(e).replace(',)', ')')))
     return S_OK(filename)
+
+  def isRFC(self):
+    if not self.__loadedChain:
+      return S_ERROR(DErrno.ENOCHAIN)
+    return S_OK(self.__isRFC)
 
   def dumpChainToString(self):
     """
@@ -607,6 +634,7 @@ class X509Chain(object):
         credDict['identity'] = result['Identity']
         credDict['subproxyUser'] = result['SubproxyUser']
 
+      credDict['rfc'] = self.__isRFC
       retVal = Registry.getUsernameForDN(credDict['identity'])
       if not retVal['OK']:
         return S_OK(credDict)

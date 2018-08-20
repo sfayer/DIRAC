@@ -21,6 +21,7 @@ class CLIParams(object):
   proxyLoc = False
   onTheFly = False
   stdinPasswd = False
+  rfcIfPossible = False
   userPasswd = ""
 
   def __str__(self):
@@ -101,10 +102,7 @@ class CLIParams(object):
 
 
 from DIRAC import S_ERROR
-if os.getenv('DIRAC_USE_M2CRYPTO', 'NO').lower() in ('yes', 'true'):
-  from DIRAC.Core.Security.m2crypto.X509Chain import X509Chain
-else:
-  from DIRAC.Core.Security.X509Chain import X509Chain
+from DIRAC.Core.Security.X509Chain import X509Chain
 from DIRAC.Core.Security import Locations
 from DIRAC.FrameworkSystem.Client.ProxyManagerClient import gProxyManager
 
@@ -182,4 +180,4 @@ def uploadProxy(params):
     restrictLifeTime = 0
 
   DIRAC.gLogger.info(" Uploading...")
-  return gProxyManager.uploadProxy(chain, diracGroup, restrictLifeTime=restrictLifeTime)
+  return gProxyManager.uploadProxy(chain, diracGroup, restrictLifeTime=restrictLifeTime, rfcIfPossible = params.rfcIfPossible)

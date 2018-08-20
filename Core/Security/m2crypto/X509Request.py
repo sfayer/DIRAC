@@ -15,6 +15,7 @@ class X509Request(object):
   """
 
   def __init__(self, reqObj=None, pkeyObj=None):
+    # can we remove these two arguments, never used
     self.__valid = False
     self.__reqObj = reqObj
     self.__pkeyObj = pkeyObj
@@ -25,10 +26,12 @@ class X509Request(object):
     """
     Generate proxy request
     """
+    # self.__pkeyObj is both the public and private key
     self.__pkeyObj = M2Crypto.EVP.PKey()
     self.__pkeyObj.assign_rsa(M2Crypto.RSA.gen_key(bitStrength, 65537, callback=M2Crypto.util.quiet_genparam_callback))
     self.__reqObj = M2Crypto.X509.Request()
     self.__reqObj.set_pubkey(self.__pkeyObj)
+
     if limited:
       self.__reqObj.get_subject().add_entry_by_txt(field="CN", type=M2Crypto.ASN1.MBSTRING_ASC,
                                                    entry="limited proxy", len=-1, loc=-1, set=0)
@@ -53,6 +56,7 @@ class X509Request(object):
   def getRequestObject(self):
     """
     Get internal X509Request object
+    Not used
     """
     return S_OK(self.__reqObj)
 
@@ -138,7 +142,7 @@ class X509Request(object):
 
   def checkChain(self, chain):
     """
-    Check that the chain matches the request
+    Check that the public keys of the chain and the request match
     """
     if not self.__valid:
       return S_ERROR(DErrno.ENOCERT)

@@ -29,10 +29,7 @@ from DIRAC.ConfigurationSystem.Client.ConfigurationData import gConfigurationDat
 from DIRAC.Core.DISET.private.FileHelper import FileHelper
 from DIRAC.Core.DISET.private.MessageBroker import MessageBroker, getGlobalMessageBroker
 from DIRAC.Core.DISET.MessageClient import MessageClient
-if os.getenv('DIRAC_USE_M2CRYPTO', 'NO').lower() in ('yes', 'true'):
-  from DIRAC.Core.Security.m2crypto.X509Chain import X509Chain
-else:
-  from DIRAC.Core.Security.X509Chain import X509Chain
+from DIRAC.Core.Security.X509Chain import X509Chain
 from DIRAC.Core.Utilities.ThreadPool import ThreadPool
 from DIRAC.Core.DISET.private.Service import Service
 from DIRAC.Core.DISET.RPCClient import RPCClient
