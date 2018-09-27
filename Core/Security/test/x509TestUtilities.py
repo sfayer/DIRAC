@@ -268,7 +268,7 @@ def deimportDIRAC():
   """
 
   for mod in list(sys.modules):
-    if mod == 'DIRAC' or mod.startswith('DIRAC.'):
+    if (mod == 'DIRAC' or mod.startswith('DIRAC.')) and not mod.startswith('DIRAC.Core.Security.test'):
       sys.modules.pop(mod)
 
 

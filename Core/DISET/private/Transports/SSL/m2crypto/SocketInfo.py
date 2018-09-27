@@ -15,7 +15,7 @@ from DIRAC.FrameworkSystem.Client.Logger import gLogger
 from DIRAC.Core.Security import Locations
 
 
-import GSI
+# import GSI
 import M2Crypto
 from M2Crypto import m2, SSL, Err
 
@@ -127,23 +127,19 @@ class SocketInfo:
   #   else:
   #     return self._serverCallback(*args, **kwargs)
 
-  def __verifyCert(self, hostCN, hostConn):
+  def _verifyCert(self, peerCert):
     """
         Returns True if peercert is valid according to the configured
         validation mode and hostname.
         The ssl handshake already tested the certificate for a valid
         CA signature; the only thing that remains is to check
         the hostname.
+
+        :param peerCert: ~M2Crypto.X509 object, host certificate
     """
-    hostCN_m = hostCN
-    if '/' in hostCN:
-      hostCN_m = hostCN.split('/')[1]
-    if hostCN_m == hostConn:
-      return True
-    result = checkHostsMatch(hostCN_m, hostConn)
-    if not result['OK']:
-      return False
-    return result['Value']
+
+    gLogger.warn("IMPLEMENT ME")
+    return True
 
   # Seems unused
   # def _clientCallback(self, conn, cert, errnum, depth, ok):
@@ -242,7 +238,6 @@ class SocketInfo:
     return S_OK(caStore)
 
   def __createContext(self):
-    print "CHRIS %s" % os.environ['OPENSSL_ALLOW_PROXY_CERTS']
     clientContext = self.infoDict.get('clientMode', False)
     # Initialize context
     # contextOptions = M2Crypto.SSL.op_all
@@ -252,11 +247,14 @@ class SocketInfo:
     #   self.sslContext.set_options(contextOptions)
 
     ssl_version = self.infoDict.get('sslMethod', 'tls')
+
+
     self.sslContext = M2Crypto.SSL.Context(protocol=ssl_version)
 
     # print debug message
     self.sslContext.set_info_callback()
 
+    #TODO: CHRIS UNCOMMENT THAT !!!
     self.sslContext.set_cipher_list(self.infoDict.get('sslCiphers', DEFAULT_SSL_CIPHERS))
 
     # This is not quite true.
@@ -264,15 +262,16 @@ class SocketInfo:
     # but we also do not check the remote peer !
     if not self.infoDict.get('skipCACheck', False):
       self.sslContext.set_verify(M2Crypto.SSL.verify_peer | M2Crypto.SSL.verify_fail_if_no_peer_cert, VERIFY_DEPTH)
-      # self.sslContext.load_verify_locations(capath = Locations.getCAsLocation())
-      loadedCA = self.sslContext.load_verify_locations(
-          cafile='/home/chaen/dirac/DIRAC/Core/Security/test/certs/ca/ca.cert.pem')
+      loadedCA = self.sslContext.load_verify_locations(capath = Locations.getCAsLocation())
+      # loadedCA = self.sslContext.load_verify_locations(
+      #     capath='/home/chaen/dirac/DIRAC/Core/Security/test/certs/ca/')
       if not loadedCA:
         print "boom :'('"
         raise Exception("CA Certificates not loaded")
+      else:
+        print "CHRIS LOADED CA PROPERLY"
     else:
-      self.sslContext.set_verify(GSI.SSL.VERIFY_NONE, VERIFY_DEPTH)  # Do not require a certificate
-
+      self.sslContext.set_verify(M2Crypto.SSL.VERIFY_NONE, VERIFY_DEPTH)  # Do not require a
     return S_OK()
 
   def __generateContextWithCerts(self):
@@ -284,10 +283,11 @@ class SocketInfo:
     retVal = self.__createContext()
     if not retVal['OK']:
       return retVal
-    self.sslContext.load_cert_chain(certchainfile=certKeyTuple[0], keyfile=certKeyTuple[1])
+    self.sslContext.load_cert(certfile=certKeyTuple[0], keyfile=certKeyTuple[1])
     return S_OK()
 
   def __generateContextWithProxy(self, proxyPath=None):
+    print "CHRIS ICI !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
     if not proxyPath:
       if 'proxyLocation' in self.infoDict:
         proxyPath = self.infoDict['proxyLocation']
@@ -302,6 +302,10 @@ class SocketInfo:
     retVal = self.__createContext()
     if not retVal['OK']:
       return retVal
+
+    # # # TODO CHRIS REMOVE THAT
+    # proxyPath = '/home/chaen/dirac/DIRAC/Core/Security/test/certs/user/usercert.pem'
+    # proxyKey = '/home/chaen/dirac/DIRAC/Core/Security/test/certs/user/userkey.pem'
     self.sslContext.load_cert_chain(certchainfile=proxyPath, keyfile=proxyPath)
     return S_OK()
 
@@ -328,51 +332,56 @@ class SocketInfo:
     return S_OK()
 
   def doClientHandshake(self):
-    sslbio = M2Crypto.BIO.SSLBio()
-    readbio = M2Crypto.BIO.MemoryBuffer()
-    writebio = M2Crypto.BIO.MemoryBuffer()
-    sslbio.set_ssl(self.sslSocket)
-    self.sslSocket.set_bio(readbio, writebio)
-    self.sslSocket.set_connect_state()
-    return self.__sslHandshake()
+    # sslbio = M2Crypto.BIO.SSLBio()
+    # readbio = M2Crypto.BIO.MemoryBuffer()
+    # writebio = M2Crypto.BIO.MemoryBuffer()
+    # sslbio.set_ssl(self.sslSocket)
+    # self.sslSocket.set_bio(readbio, writebio)
+    # self.sslSocket.set_connect_state()
+    # return self.__sslHandshake()
+    print "CHRIS doClientHandhsake %s"%self.infoDict
+    return self._do_ssl_handshake()
 
   def doServerHandshake(self):
     # self.sslSocket.setup_ssl()
     # self.sslSocket.set_accept_state()
     # self.sslSocket.accept_ssl()
     # res = self.sslSocket.do_handshake()
+    print "CHRIS doServerHandshake"
     return self._do_ssl_handshake()
 
   def _do_ssl_handshake(self):
     print "OHHHHHHHHH YES "
     clientSide = self.infoDict.get('clientMode')
     try:
+      print "_do_ssl_handshake setup_ssl"
       self.sslSocket.setup_ssl()
 
       # Set the socket to a different state depending on the client/server mode
-      if clientSide:
-        self.sslSocket.set_connect_state()
-      else:
-        self.sslSocket.set_accept_state()
-
-      print "au moins ?"
       # Actual accept/connect logic
       if clientSide:
+        self.sslSocket.set_connect_state()
         res = self.sslSocket.connect_ssl()
       else:
-        res = self.sslSocket.accept_ssl()
+        # CHRIS TEST
+        pass
+        res = 1
+        print "CHRIS DO NOTHING in do_ssl_andshake"
+        # print "_do_ssl_handshake set_accept_state"
+        # self.sslSocket.set_accept_state()
+        # print "_do_ssl_handshake accept_ssl"
+        # res = self.sslSocket.accept_ssl()
+        # print "_do_ssl_handshake accept_ssl result %s"%res
 
-      print "res is %s"%sres
 
       # There was an error, but everything was closed properly
       # see ~M2Crypto.SSL.Connection.accept_ssl for detailed description
       if res == 0:
-
-        return S_ERROR("Problem connecting")
+        return S_ERROR("CHRIS Problem connecting")
 
 
       if res < 0:
-        print 'petit petit'
+        print "CHRIS NEGATIVE RES"
         err_num = self.sslSocket.ssl_get_error(res)
         print "Err: %s" % err_num
         print "Err Str: %s" % Err.get_error_reason(err_num)
@@ -380,6 +389,7 @@ class SocketInfo:
         self.sslSocket.close()
         return S_ERROR(err_num, Err.get_error_reason(err_num))
     except SSL.SSLError as e:
+      print "CHRIS ERROR in _do_ssl_handshake %s"%repr(e)
       print "NON "
       raise
     except socket.error as err:
@@ -398,58 +408,59 @@ class SocketInfo:
       # AttributeError.
       return self.sslSocket.close(exc_info=err)
     else:
-      print 'else !@'
+      print 'CHRIS ALL FINE'
       certValid = self._verifyCert(self.sslSocket.get_peer_cert())
-      if not certValid['OK']:
-        print "VALIDATION FAILED!"
+      if not certValid:
+        print "CHRIS VALIDATION FAILED!"
         self.sslSocket.close()
-        return certValid
+        return S_ERROR("CERT INVALID CHANGE ME CHRIS")
 
-    print "Connect complete! (Sever: %s)!" % (not clientSide)
-
-    return S_OK()
-
-
-  def __sslHandshake(self):
-    print "NOOOOOOOOOOOOOO"
-    start = time.time()
-    timeout = self.infoDict['timeout']
-
-    while True:
-      if timeout:
-        if time.time() - start > timeout:
-          return S_ERROR("Handshake timeout exceeded")
-      try:
-        self.sslSocket.do_handshake()
-        break
-      except GSI.SSL.WantReadError:
-        time.sleep(0.001)
-      except GSI.SSL.WantWriteError:
-        time.sleep(0.001)
-      except GSI.SSL.Error as v:
-        if self.__retry < 3:
-          self.__retry += 1
-          return self.__sslHandshake()
-        else:
-          # gLogger.warn( "Error while handshaking", "\n".join( [ stError[2] for stError in v.args[0] ] ) )
-          gLogger.warn("Error while handshaking", v)
-          return S_ERROR("Error while handshaking")
-      except Exception as v:
-        gLogger.warn("Error while handshaking", v)
-        if self.__retry < 3:
-          self.__retry += 1
-          return self.__sslHandshake()
-        else:
-          # gLogger.warn( "Error while handshaking", "\n".join( [ stError[2] for stError in v.args[0] ] ) )
-          gLogger.warn("Error while handshaking", v)
-          return S_ERROR("Error while handshaking")
-
+    print "CHRIS Connect complete! (Sever: %s)!" % (not clientSide)
     credentialsDict = self.gatherPeerCredentials()
-    if self.infoDict['clientMode']:
-      hostnameCN = credentialsDict['CN']
-      # if hostnameCN.split("/")[-1] != self.infoDict[ 'hostname' ]:
-      if not self.__verifyCert(hostnameCN, self.infoDict['hostname']):
-        gLogger.warn("Server is not who it's supposed to be",
-                     "Connecting to %s and it's %s" % (self.infoDict['hostname'], hostnameCN))
-    gLogger.debug("", "Authenticated peer (%s)" % credentialsDict['DN'])
+
     return S_OK(credentialsDict)
+
+  #
+  # def __sslHandshake(self):
+  #   print "NOOOOOOOOOOOOOO"
+  #   start = time.time()
+  #   timeout = self.infoDict['timeout']
+  #
+  #   while True:
+  #     if timeout:
+  #       if time.time() - start > timeout:
+  #         return S_ERROR("Handshake timeout exceeded")
+  #     try:
+  #       self.sslSocket.do_handshake()
+  #       break
+  #     except GSI.SSL.WantReadError:
+  #       time.sleep(0.001)
+  #     except GSI.SSL.WantWriteError:
+  #       time.sleep(0.001)
+  #     except GSI.SSL.Error as v:
+  #       if self.__retry < 3:
+  #         self.__retry += 1
+  #         return self.__sslHandshake()
+  #       else:
+  #         # gLogger.warn( "Error while handshaking", "\n".join( [ stError[2] for stError in v.args[0] ] ) )
+  #         gLogger.warn("Error while handshaking", v)
+  #         return S_ERROR("Error while handshaking")
+  #     except Exception as v:
+  #       gLogger.warn("Error while handshaking", v)
+  #       if self.__retry < 3:
+  #         self.__retry += 1
+  #         return self.__sslHandshake()
+  #       else:
+  #         # gLogger.warn( "Error while handshaking", "\n".join( [ stError[2] for stError in v.args[0] ] ) )
+  #         gLogger.warn("Error while handshaking", v)
+  #         return S_ERROR("Error while handshaking")
+  #
+  #   credentialsDict = self.gatherPeerCredentials()
+  #   if self.infoDict['clientMode']:
+  #     hostnameCN = credentialsDict['CN']
+  #     # if hostnameCN.split("/")[-1] != self.infoDict[ 'hostname' ]:
+  #     if not self._verifyCert(self.sslSocket.get_peer_cert()):
+  #       gLogger.warn("Server is not who it's supposed to be",
+  #                    "Connecting to %s and it's %s" % (self.infoDict['hostname'], hostnameCN))
+  #   gLogger.debug("", "Authenticated peer (%s)" % credentialsDict['DN'])
+  #   return S_OK(credentialsDict)

@@ -81,16 +81,15 @@ class X509Chain(object):
     """
     certList = []
 
-    import ipdb
-    ipdb.set_trace()
+
     certStack = sslConnection.get_peer_cert_chain()
     for cert in certStack:
-      certList.append(cert)
+      certList.append(X509Certificate(x509Obj=cert))
 
     # Servers don't receive the whole chain, the last cert comes alone
     # if not self.infoDict['clientMode']:
     if True:
-      certList.insert(0, sslConnection.get_peer_cert())
+      certList.insert(0, X509Certificate(x509Obj = sslConnection.get_peer_cert()))
     peerChain = X509Chain(certList=certList)
 
     return peerChain

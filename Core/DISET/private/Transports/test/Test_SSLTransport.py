@@ -34,9 +34,14 @@ MAGIC_ANSWER = "Who, Who, who ?"
 
 PORT_NUMBER = 1234
 
-TRANSPORTTYPES = (PlainTransport.PlainTransport, M2SSLTransport.SSLTransport)
+# TRANSPORTTYPES = (PlainTransport.PlainTransport, M2SSLTransport.SSLTransport)
 # TRANSPORTTYPES = (SSLTransport.SSLTransport, )
+TRANSPORTTYPES = (GSISSLTransport.SSLTransport, )
 
+
+
+# https://www.ibm.com/developerworks/linux/library/l-openssl/index.html
+# http://www.herongyang.com/Cryptography/
 
 class DummyServiceReactor(object):
   """ This class behaves like a ServiceReactor, except that it exists after treating a single request """
@@ -63,12 +68,15 @@ class DummyServiceReactor(object):
         It more or less does Service._processInThread
     """
 
+    print "CHRIS DUMMY handleConnection"
     self.clientTransport = clientTransport
-
+    print "CHRIS DUMMY BEFORE HANDSHAKE"
     res = clientTransport.handshake()
+    print "CHRIS DUMMY AFTER %s"%res
     assert res['OK'], res
 
     self.receivedMessage = clientTransport.receiveData(1024)
+    print "FINAL RESULT YOUHOU %s"%self.receivedMessage
     clientTransport.sendData(MAGIC_ANSWER)
     clientTransport.close()
 
@@ -122,8 +130,8 @@ def create_serverAndClient(request):
                    'proxyLocation': proxyFile,
                   }
 
-  # time.sleep(10)
-  time.sleep(10)
+  time.sleep(1)
+
 
   clientTransport = transportObject(("127.0.0.1", PORT_NUMBER), bServerMode=False, **clientOptions)
   res = clientTransport.initAsClient()
@@ -147,6 +155,8 @@ def ping_server(clientTransport):
 
   clientTransport.setSocketTimeout(5)
   clientTransport.sendData(MAGIC_QUESTION)
+  print "CHRIS UNTIL HERE IT IS FINE"
+  # time.sleep(3)
   serverReturn = clientTransport.receiveData()
   return serverReturn
 

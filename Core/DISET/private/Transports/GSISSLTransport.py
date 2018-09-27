@@ -1,5 +1,13 @@
 __RCSID__ = "$Id$"
 
+def logCall(func):
+  def innerFunc(*args, **kwargs):
+    print "CHRIS -> %s(%s, %s)"%(func.func_name, args[1:], kwargs)
+    r = func(*args, **kwargs)
+    print "CHRIS <- %s: %s"%(func.func_name, r)
+    return r
+  return innerFunc
+
 import os
 import time
 import GSI
@@ -23,6 +31,7 @@ class SSLTransport( BaseTransport ):
 
   __readWriteLock = LockRing().getLock()
 
+  @logCall
   def __init__( self, *args, **kwargs ):
     self.__writesDone = 0
     self.__locked = False
@@ -77,6 +86,7 @@ class SSLTransport( BaseTransport ):
     return S_OK()
 
   def close( self ):
+    print "CHRIS DO I WANT TO CLOSE HERE ?"
     gLogger.debug( "Closing socket" )
     try:
 
@@ -97,6 +107,7 @@ class SSLTransport( BaseTransport ):
 
 
   def renewServerContext( self ):
+    print "CHRIS RENEWSER"
     BaseTransport.renewServerContext( self )
     result = gSocketInfoFactory.renewServerContext( self.oSocketInfo )
     if not result[ 'OK' ]:

@@ -8,7 +8,7 @@ import select
 import os
 import hashlib
 
-import GSI
+# import GSI
 import M2Crypto
 from M2Crypto import m2
 
@@ -96,12 +96,14 @@ class SocketInfoFactory(object):
 
   def __connect(self, socketInfo, hostAddress):
     # Connect baby!
+    print "CHRIS __connect"
     result = self.__socketConnect(hostAddress, socketInfo.infoDict['timeout'])
     if not result['OK']:
       return result
     osSocket = result['Value']
     # SSL MAGIC
     sslSocket = M2Crypto.SSL.Connection(ctx=socketInfo.getSSLContext(), sock=osSocket)
+    m2.ssl_set_mode(sslSocket.ssl, m2.SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER)
     socketInfo.setSSLSocket(sslSocket)
 
     # TODO use session
@@ -128,6 +130,7 @@ class SocketInfoFactory(object):
     return S_OK(sslSocket)
 
   def getSocket(self, hostAddress, **kwargs):
+    print "CHRIS getSocket"
     hostName = hostAddress[0]
     retVal = self.generateClientInfo(hostName, kwargs)
     if not retVal['OK']:
