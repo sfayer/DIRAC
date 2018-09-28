@@ -1,12 +1,6 @@
 __RCSID__ = "$Id$"
 
-def logCall(func):
-  def innerFunc(*args, **kwargs):
-    print "CHRIS -> %s(%s, %s)"%(func.func_name, args[1:], kwargs)
-    r = func(*args, **kwargs)
-    print "CHRIS <- %s: %s"%(func.func_name, r)
-    return r
-  return innerFunc
+from .logCall import logCall
 
 import os
 import time
@@ -37,6 +31,7 @@ class SSLTransport( BaseTransport ):
     self.__locked = False
     BaseTransport.__init__( self, *args, **kwargs )
 
+  @logCall
   def __lock( self, timeout = 1000 ):
     while self.__locked and timeout:
       time.sleep( 0.005 )
@@ -51,6 +46,7 @@ class SSLTransport( BaseTransport ):
     SSLTransport.__readWriteLock.release()
     return True
 
+  @logCall
   def __unlock( self ):
     self.__locked = False
 
@@ -60,6 +56,7 @@ class SSLTransport( BaseTransport ):
     """
     gSocketInfoFactory.setSocketTimeout( timeout )
 
+  @logCall
   def initAsClient( self ):
     retVal = gSocketInfoFactory.getSocket( self.stServerAddress, **self.extraArgsDict )
     if not retVal[ 'OK' ]:
@@ -71,6 +68,7 @@ class SSLTransport( BaseTransport ):
     self.remoteAddress = self.oSocket.getpeername()
     return S_OK()
 
+  @logCall
   def initAsServer( self ):
     if not self.serverMode():
       raise RuntimeError( "Must be initialized as server mode" )
@@ -85,8 +83,8 @@ class SSLTransport( BaseTransport ):
     Devloader().addStuffToClose( self.oSocket )
     return S_OK()
 
+  @logCall
   def close( self ):
-    print "CHRIS DO I WANT TO CLOSE HERE ?"
     gLogger.debug( "Closing socket" )
     try:
 
@@ -106,8 +104,8 @@ class SSLTransport( BaseTransport ):
 
 
 
+  @logCall
   def renewServerContext( self ):
-    print "CHRIS RENEWSER"
     BaseTransport.renewServerContext( self )
     result = gSocketInfoFactory.renewServerContext( self.oSocketInfo )
     if not result[ 'OK' ]:
@@ -116,6 +114,7 @@ class SSLTransport( BaseTransport ):
     self.oSocket = self.oSocketInfo.getSSLSocket()
     return S_OK()
 
+  @logCall
   def handshake( self ):
     """
       Initiate the client-server handshake and extract credentials
@@ -132,6 +131,7 @@ class SSLTransport( BaseTransport ):
       self.peerCredentials[ key ] = creds[ key ]
     return S_OK()
 
+  @logCall
   def setClientSocket( self, oSocket ):
     if self.serverMode():
       raise RuntimeError( "Must be initialized as client mode" )
@@ -140,6 +140,7 @@ class SSLTransport( BaseTransport ):
     self.remoteAddress = self.oSocket.getpeername()
     self.oSocket.settimeout( self.oSocketInfo.infoDict[ 'timeout' ] )
 
+  @logCall
   def acceptConnection( self ):
     oClientTransport = SSLTransport( self.stServerAddress )
     oClientSocket, _stClientAddress = self.oSocket.accept()
@@ -151,6 +152,7 @@ class SSLTransport( BaseTransport ):
     return S_OK( oClientTransport )
 
 
+  @logCall
   def _read( self, bufSize = 4096, skipReadyCheck = False ):
     self.__lock()
     try:
@@ -177,6 +179,7 @@ class SSLTransport( BaseTransport ):
   def isLocked( self ):
     return self.__locked
 
+  @logCall
   def _write( self, buffer ):
     self.__lock()
     try:

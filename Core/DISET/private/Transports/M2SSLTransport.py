@@ -1,11 +1,13 @@
 __RCSID__ = "$Id$"
 
+from .logCall import logCall, doLog
+
 import os
 import socket
 import time
 # import GSI
 
-from M2Crypto import m2, SSL
+from M2Crypto import m2, SSL, threading as M2Threading
 
 #https://github.com/eventbrite/m2crypto/blob/master/demo/medusa/asyncore.py
 
@@ -20,17 +22,20 @@ from DIRAC.Core.Security.m2crypto.X509Chain import X509Chain
 from DIRAC.Core.Security.m2crypto.X509Certificate import X509Certificate
 
 # GSI.SSL.set_thread_safe()
+M2Threading.init()
 
 
 class SSLTransport(BaseTransport):
 
   __readWriteLock = LockRing().getLock()
 
+  @logCall
   def __init__(self, *args, **kwargs):
     self.__writesDone = 0
     self.__locked = False
     BaseTransport.__init__(self, *args, **kwargs)
 
+  @logCall
   def __lock(self, timeout=1000):
     while self.__locked and timeout:
       time.sleep(0.005)
@@ -45,8 +50,11 @@ class SSLTransport(BaseTransport):
     SSLTransport.__readWriteLock.release()
     return True
 
+  @logCall
   def __unlock(self):
     self.__locked = False
+
+
 
   def setSocketTimeout(self, timeout):
     """
@@ -54,6 +62,8 @@ class SSLTransport(BaseTransport):
     """
     gSocketInfoFactory.setSocketTimeout(timeout)
 
+
+  @logCall
   def initAsClient(self):
     retVal = gSocketInfoFactory.getSocket(self.stServerAddress, **self.extraArgsDict)
     if not retVal['OK']:
@@ -66,6 +76,8 @@ class SSLTransport(BaseTransport):
     self.remoteAddress = self.oSocket.getpeername()
     return S_OK()
 
+
+  @logCall
   def initAsServer(self):
     if not self.serverMode():
       raise RuntimeError("Must be initialized as server mode")
@@ -81,6 +93,8 @@ class SSLTransport(BaseTransport):
     Devloader().addStuffToClose(self.oSocket)
     return S_OK()
 
+
+  @logCall
   def close(self):
     gLogger.debug("Closing socket")
     try:
@@ -97,6 +111,8 @@ class SSLTransport(BaseTransport):
     except Exception as e:
       pass
 
+
+  @logCall
   def renewServerContext(self):
     BaseTransport.renewServerContext(self)
     result = gSocketInfoFactory.renewServerContext(self.oSocketInfo)
@@ -106,13 +122,13 @@ class SSLTransport(BaseTransport):
     self.oSocket = self.oSocketInfo.getSSLSocket()
     return S_OK()
 
+  @logCall
   def handshake(self):
     """
       Initiate the client-server handshake and extract credentials
 
       :return: S_OK (with credentialDict if new session)
     """
-    print "CHRIS handshake"
     retVal = self.oSocketInfo.doServerHandshake()
     if not retVal['OK']:
       return retVal
@@ -125,6 +141,8 @@ class SSLTransport(BaseTransport):
       self.peerCredentials[key] = creds[key]
     return S_OK()
 
+
+  @logCall
   def setClientSocket(self, oSocket):
     if self.serverMode():
       raise RuntimeError("Must be initialized as client mode")
@@ -133,6 +151,8 @@ class SSLTransport(BaseTransport):
     self.remoteAddress = self.oSocket.getpeername()
     self.oSocket.settimeout(self.oSocketInfo.infoDict['timeout'])
 
+
+  @logCall
   def acceptConnection(self):
     oClientTransport = SSLTransport(self.stServerAddress)
     oClientSocket, _stClientAddress = self.oSocket.accept()
@@ -144,37 +164,47 @@ class SSLTransport(BaseTransport):
     print "CHRIS accept connection"
     return S_OK(oClientTransport)
 
-  def _read(self, bufSize=4096, skipReadyCheck=False):
-    print "CHRIS IN ENTER READr"
 
+  @logCall
+  def _read(self, bufSize=4096, skipReadyCheck=False):
     # Chris do not use the lock
-    # self.__lock()
+    self.__lock()
     try:
-      # No need to redo te timeout here, it has been done in the init
-      return S_OK(self.oSocket.recv(bufSize))
-    except socket.timeout:
-      return S_ERROR("Socket read timeout exceeded")
-    except SSL.SSLError as e:
-      print "CHRIS READ EXCEPT %s" % e
-      if e.args[0] == m2.ssl_error_want_read:
-        time.sleep(0.001)
-      elif  e.args[0] == m2.ssl_error_want_write:
-        time.sleep(0.001)
-      else:
-        raise
-    # Not sure why wantWrite is needed here !
-    # Nor what is this zeroreturn
-    # except GSI.SSL.WantWriteError:
-    #   time.sleep( 0.001 )
-    # except GSI.SSL.ZeroReturnError:
-    #   return S_OK( "" )
-    except Exception as e:
-      print "CHRIS READ WILD EXCEPT %s" % e
-      return S_ERROR("Exception while reading from peer: %s" % str(e))
+      while True:
+        try:
+          recv =self.oSocket.recv(bufSize)
+          doLog("recv %s"%recv)
+          # No need to redo te timeout here, it has been done in the init
+          return S_OK()
+        except socket.timeout:
+          doLog("sockettiemout")
+          return S_ERROR("Socket read timeout exceeded")
+        except SSL.SSLError as e:
+          doLog("SSLError %s"%e)
+          print "CHRIS READ EXCEPT %s" % e
+          if e.args[0] == m2.ssl_error_want_read:
+            doLog("WANT READ")
+            time.sleep(0.001)
+          elif  e.args[0] == m2.ssl_error_want_write:
+            doLog("WANT WRITE")
+            time.sleep(0.001)
+          else:
+            doLog("ELSE")
+            raise
+        # Not sure why wantWrite is needed here !
+        # Nor what is this zeroreturn
+        # except GSI.SSL.WantWriteError:
+        #   time.sleep( 0.001 )
+        # except GSI.SSL.ZeroReturnError:
+        #   return S_OK( "" )
+        except Exception as e:
+          doLog("WILD EXCEPT %s"%e)
+          print "CHRIS READ WILD EXCEPT %s" % e
+          return S_ERROR("Exception while reading from peer: %s" % str(e))
     finally:
-      pass
+      # pass
       # CHRIS do not use the lock
-      # self.__unlock()
+      self.__unlock()
 
   # def _read_old( self, bufSize = 4096, skipReadyCheck = False ):
   #   print "CHRIS IN ENTER READr"
@@ -245,43 +275,57 @@ class SSLTransport(BaseTransport):
   #   finally:
   #     self.__unlock()
 
-
-def _write(self, buffer):
-  print "chris write"
-  # CHRIS NO LOCK
-  # self.__lock()
-  try:
-    # CHRIS NO Renegotiation
-
-    sentBytes = 0
-    while sentBytes < len(buffer):
-      try:
-        sent = self.oSocket.send(buffer[sentBytes:])
-        if sent < 0:
-          print "CHRIS negative sent ! %s" % sent
-          err = self.oSocket.ssl_get_error(sent)
-          # if the error is try again, let's do it !
-          if err == SSL.m2.ssl_error_want_write:
-            print "CHRIS ITS OK"
-            continue
-          if err == SSL.m2.ssl_error_want_read:
-            print "CHRIS ITS OK BUT READ"
-            continue
-          return S_ERROR("Unhandled error on send %s %s" % (sent, err))
-
-        elif sent == 0:
-          return S_ERROR("Connection closed by peer")
-        elif sent > 0:
-          sentBytes += sent
-      except socket.timeout:
-        return S_ERROR("Socket write timeout exceeded")
-      except Exception as e:
-        return S_ERROR("Error while sending: %s" % str(e))
-    return S_OK(sentBytes)
-  finally:
-    pass
+  @logCall
+  def _write(self, buffer):
     # CHRIS NO LOCK
-    self.__unlock()
+    self.__lock()
+    try:
+      # CHRIS NO Renegotiation
+      # if not self.oSocketInfo.infoDict[ 'clientMode' ]:
+      #   #self.__writesDone += 1
+      #   if self.__writesDone > 1000:
+      #
+      #     self.__writesDone = 0
+      #     ok = self.oSocket.renegotiate()
+      #     if ok:
+      #       try:
+      #         ok = self.oSocket.do_handshake()
+      #       except Exception as e:
+      #         return S_ERROR( "Renegotiation failed: %s" % str( e ) )
+
+      sentBytes = 0
+      while sentBytes < len(buffer):
+        try:
+          sent = self.oSocket.send(buffer[sentBytes:])
+          if sent < 0:
+            doLog("Negative send %s"%sent)
+            print "CHRIS negative sent ! %s" % sent
+            err = self.oSocket.ssl_get_error(sent)
+            # if the error is try again, let's do it !
+            if err == SSL.m2.ssl_error_want_write:
+              doLog("WANT WRITE")
+              print "CHRIS ITS OK"
+              continue
+            if err == SSL.m2.ssl_error_want_read:
+              doLog("WANT READ, strange")
+              print "CHRIS ITS OK BUT READ"
+              continue
+            doLog("Argh, unhandled")
+            return S_ERROR("Unhandled error on send %s %s" % (sent, err))
+
+          elif sent == 0:
+            return S_ERROR("Connection closed by peer")
+          elif sent > 0:
+            sentBytes += sent
+        except socket.timeout:
+          return S_ERROR("Socket write timeout exceeded")
+        except Exception as e:
+          return S_ERROR("Error while sending: %s" % str(e))
+      return S_OK(sentBytes)
+    finally:
+      # pass
+      # CHRIS NO LOCK
+      self.__unlock()
 
 
 def checkSanity(urlTuple, kwargs):

@@ -253,6 +253,7 @@ class SocketInfo:
 
     # print debug message
     self.sslContext.set_info_callback()
+    x509Store = self.sslContext.get_cert_store()
 
     #TODO: CHRIS UNCOMMENT THAT !!!
     self.sslContext.set_cipher_list(self.infoDict.get('sslCiphers', DEFAULT_SSL_CIPHERS))
@@ -262,9 +263,9 @@ class SocketInfo:
     # but we also do not check the remote peer !
     if not self.infoDict.get('skipCACheck', False):
       self.sslContext.set_verify(M2Crypto.SSL.verify_peer | M2Crypto.SSL.verify_fail_if_no_peer_cert, VERIFY_DEPTH)
+      print "CHRIS TAKING CA FROM %s"%Locations.getCAsLocation()
       loadedCA = self.sslContext.load_verify_locations(capath = Locations.getCAsLocation())
-      # loadedCA = self.sslContext.load_verify_locations(
-      #     capath='/home/chaen/dirac/DIRAC/Core/Security/test/certs/ca/')
+
       if not loadedCA:
         print "boom :'('"
         raise Exception("CA Certificates not loaded")
@@ -283,7 +284,7 @@ class SocketInfo:
     retVal = self.__createContext()
     if not retVal['OK']:
       return retVal
-    self.sslContext.load_cert(certfile=certKeyTuple[0], keyfile=certKeyTuple[1])
+    self.sslContext.load_cert_chain(certchainfile=certKeyTuple[0], keyfile=certKeyTuple[1])
     return S_OK()
 
   def __generateContextWithProxy(self, proxyPath=None):
@@ -304,9 +305,9 @@ class SocketInfo:
       return retVal
 
     # # # TODO CHRIS REMOVE THAT
-    # proxyPath = '/home/chaen/dirac/DIRAC/Core/Security/test/certs/user/usercert.pem'
-    # proxyKey = '/home/chaen/dirac/DIRAC/Core/Security/test/certs/user/userkey.pem'
-    self.sslContext.load_cert_chain(certchainfile=proxyPath, keyfile=proxyPath)
+    proxyPath = '/home/chaen/dirac/DIRAC/Core/Security/test/certs/user/usercert.pem'
+    proxyKey = '/home/chaen/dirac/DIRAC/Core/Security/test/certs/user/userkey.pem'
+    self.sslContext.load_cert_chain(certchainfile=proxyPath, keyfile=proxyKey)
     return S_OK()
 
   def __generateContextWithProxyString(self):

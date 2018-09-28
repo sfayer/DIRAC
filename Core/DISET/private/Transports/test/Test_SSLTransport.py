@@ -36,7 +36,8 @@ PORT_NUMBER = 1234
 
 # TRANSPORTTYPES = (PlainTransport.PlainTransport, M2SSLTransport.SSLTransport)
 # TRANSPORTTYPES = (SSLTransport.SSLTransport, )
-TRANSPORTTYPES = (GSISSLTransport.SSLTransport, )
+TRANSPORTTYPES = (M2SSLTransport.SSLTransport, )
+# TRANSPORTTYPES = (GSISSLTransport.SSLTransport, )
 
 
 
