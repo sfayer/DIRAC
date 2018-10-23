@@ -24,11 +24,19 @@ M2Threading.init()
 # TODO: CRL checking, another item that will need support in M2Crypto to work
 # properly. This probably involves mapping quite a few functions through.
 
-# TODO: IPv6 Support, the Connection object accepts a family parameter, so that
-# should be moderately straight-forward
-
 class SSLTransport(BaseTransport):
   """ SSL Transport implementaiton using the M2Crypto library. """
+
+  def __getConnection(self):
+    """ Helper function to get a connection object,
+        Tries IPv6 (AF_INET6) first, then falls back to IPv4 (AF_INET).
+    """
+    try:
+      conn = SSL.Connection(self.__ctx, family=socket.AF_INET6)
+    except socket.error:
+      # Maybe no IPv6 support? Try IPv4 only socket.
+      conn = SSL.Connection(self.__ctx, family=socket.AF_INET)
+    return conn
 
   def __init__(self, *args, **kwargs):
     self.remoteAddress = None
@@ -43,7 +51,7 @@ class SSLTransport(BaseTransport):
   def initAsClient(self):
     if self.serverMode():
       raise RuntimeError("SSLTransport is in server mode.")
-    self.oSocket = SSL.Connection(self.__ctx)
+    self.oSocket = self.__getConnection()
     self.oSocket.connect(self.stServerAddress)
     self.remoteAddress = self.oSocket.getpeername()
     return S_OK()
@@ -51,7 +59,7 @@ class SSLTransport(BaseTransport):
   def initAsServer(self):
     if not self.serverMode():
       raise RuntimeError("SSLTransport is in client mode.")
-    self.oSocket = SSL.Connection(self.__ctx)
+    self.oSocket = self.__getConnection()
     # Make sure reuse address is set correctly
     if self.bAllowReuseAddress:
       param = 1
@@ -72,7 +80,9 @@ class SSLTransport(BaseTransport):
   def renewServerContext(self):
     if not self.serverMode():
       raise RuntimeError("SSLTransport is in client mode.")
-    # TODO: Renew context or something here!
+    # Is this what renew means?
+    # TODO: Perhaps something else should be reloaded here? CAs?
+    self.oSocket.renegotiate()
     return S_OK()
 
   def handshake(self):
