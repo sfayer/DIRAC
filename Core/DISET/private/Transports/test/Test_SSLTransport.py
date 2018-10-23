@@ -11,7 +11,7 @@ from pytest import fixture
 from DIRAC.Core.Security.test.x509TestUtilities import CERTDIR, USERCERT, getCertOption
 
 from DIRAC.ConfigurationSystem.Client.ConfigurationData import gConfigurationData
-from DIRAC.Core.DISET.private.Transports import PlainTransport, GSISSLTransport,M2SSLTransport
+from DIRAC.Core.DISET.private.Transports import PlainTransport, GSISSLTransport, M2SSLTransport
 
 # Define all the locations
 caLocation = os.path.join(CERTDIR, 'ca')
@@ -31,7 +31,9 @@ MAGIC_ANSWER = "Who, Who, who ?"
 
 PORT_NUMBER = 1234
 
-TRANSPORTTYPES = (PlainTransport.PlainTransport, M2SSLTransport.SSLTransport)
+TRANSPORTTYPES = (PlainTransport.PlainTransport,
+                  M2SSLTransport.SSLTransport,
+                  GSISSLTransport.SSLTransport)
 # TRANSPORTTYPES = (SSLTransport.SSLTransport, )
 # TRANSPORTTYPES = (M2SSLTransport.SSLTransport, )
 # TRANSPORTTYPES = (GSISSLTransport.SSLTransport, )
