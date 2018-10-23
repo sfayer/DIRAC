@@ -12,12 +12,9 @@ from DIRAC.Core.Security.test.x509TestUtilities import CERTDIR, USERCERT, getCer
 
 from DIRAC.ConfigurationSystem.Client.ConfigurationData import gConfigurationData
 from DIRAC.Core.DISET.private.Transports import PlainTransport, GSISSLTransport,M2SSLTransport
-print CERTDIR
-# CERTDIR = os.path.join(os.path.dirname(x509TestUtilities.__file__), 'certs/')
-
 
 # Define all the locations
-caLocation = os.path.join(CERTDIR, 'ca/')
+caLocation = os.path.join(CERTDIR, 'ca')
 hostCertLocation = os.path.join(CERTDIR, 'host/hostcert.pem')
 hostKeyLocation = os.path.join(CERTDIR, 'host/hostkey.pem')
 gConfigurationData.setOptionInCFG('/DIRAC/Security/CALocation', caLocation)
@@ -34,9 +31,9 @@ MAGIC_ANSWER = "Who, Who, who ?"
 
 PORT_NUMBER = 1234
 
-# TRANSPORTTYPES = (PlainTransport.PlainTransport, M2SSLTransport.SSLTransport)
+TRANSPORTTYPES = (PlainTransport.PlainTransport, M2SSLTransport.SSLTransport)
 # TRANSPORTTYPES = (SSLTransport.SSLTransport, )
-TRANSPORTTYPES = (M2SSLTransport.SSLTransport, )
+# TRANSPORTTYPES = (M2SSLTransport.SSLTransport, )
 # TRANSPORTTYPES = (GSISSLTransport.SSLTransport, )
 
 
@@ -69,15 +66,11 @@ class DummyServiceReactor(object):
         It more or less does Service._processInThread
     """
 
-    print "CHRIS DUMMY handleConnection"
     self.clientTransport = clientTransport
-    print "CHRIS DUMMY BEFORE HANDSHAKE"
     res = clientTransport.handshake()
-    print "CHRIS DUMMY AFTER %s"%res
     assert res['OK'], res
 
     self.receivedMessage = clientTransport.receiveData(1024)
-    print "FINAL RESULT YOUHOU %s"%self.receivedMessage
     clientTransport.sendData(MAGIC_ANSWER)
     clientTransport.close()
 
@@ -134,7 +127,7 @@ def create_serverAndClient(request):
   time.sleep(1)
 
 
-  clientTransport = transportObject(("127.0.0.1", PORT_NUMBER), bServerMode=False, **clientOptions)
+  clientTransport = transportObject(("localhost", PORT_NUMBER), bServerMode=False, **clientOptions)
   res = clientTransport.initAsClient()
   assert res['OK'], res
 
@@ -156,8 +149,6 @@ def ping_server(clientTransport):
 
   clientTransport.setSocketTimeout(5)
   clientTransport.sendData(MAGIC_QUESTION)
-  print "CHRIS UNTIL HERE IT IS FINE"
-  # time.sleep(3)
   serverReturn = clientTransport.receiveData()
   return serverReturn
 
@@ -176,12 +167,13 @@ def test_getRemoteInfo(create_serverAndClient):
   serv, client = create_serverAndClient
   ping_server(client)
 
-  assert client.getRemoteAddress() == ('127.0.0.1', PORT_NUMBER)
+  addr_info = client.getRemoteAddress()
+  assert addr_info[0] in ('127.0.0.1', '::ffff:127.0.0.1', '::1')
+  assert addr_info[1] == PORT_NUMBER
   assert client.peerCredentials == {} # The peer credentials are not filled on the client side
 
-
   # We do not know about the port, so check only the address, taking into account bloody IPv6
-  assert serv.clientTransport.getRemoteAddress()[0] in ('127.0.0.1', '::ffff:127.0.0.1')
+  assert serv.clientTransport.getRemoteAddress()[0] in ('127.0.0.1', '::ffff:127.0.0.1', '::1')
   peerCreds =  serv.clientTransport.peerCredentials
 
   # There are no credentials for PlainTransport

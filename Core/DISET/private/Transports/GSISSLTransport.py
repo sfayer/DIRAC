@@ -9,7 +9,7 @@ from DIRAC.Core.Utilities.LockRing import LockRing
 from DIRAC.Core.Utilities.ReturnValues import S_ERROR, S_OK
 from DIRAC.Core.DISET.private.Transports.BaseTransport import BaseTransport
 from DIRAC.FrameworkSystem.Client.Logger import gLogger
-from DIRAC.Core.DISET.private.Transports.SSL.SocketInfoFactory import gSocketInfoFactory
+from DIRAC.Core.DISET.private.Transports.SSL.pygsi.SocketInfoFactory import gSocketInfoFactory
 from DIRAC.Core.Utilities.Devloader import Devloader
 from DIRAC.Core.Security import Locations
 if os.getenv('DIRAC_USE_M2CRYPTO', 'NO').lower() in ('yes', 'true'):
