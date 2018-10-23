@@ -24,6 +24,9 @@ M2Threading.init()
 # TODO: CRL checking, another item that will need support in M2Crypto to work
 # properly. This probably involves mapping quite a few functions through.
 
+# TODO: Catch exceptions (from M2 itself and my M2Utils module) and convert them
+# into proper DIRAC style errors.
+
 class SSLTransport(BaseTransport):
   """ SSL Transport implementaiton using the M2Crypto library. """
 
@@ -39,6 +42,9 @@ class SSLTransport(BaseTransport):
     return conn
 
   def __init__(self, *args, **kwargs):
+    """ Create an SSLTransport object, parameters are the same
+        as for other transports.
+    """
     self.remoteAddress = None
     self.peerCredentials = {}
     self.__timeout = 1
@@ -46,9 +52,13 @@ class SSLTransport(BaseTransport):
     BaseTransport.__init__(self, *args, **kwargs)
 
   def setSocketTimeout(self, timeout):
+    """ Set the timeout for socket operations.
+        TODO: In what units?
+    """
     self.__timeout = timeout
 
   def initAsClient(self):
+    """ Prepare this client socket for use. """
     if self.serverMode():
       raise RuntimeError("SSLTransport is in server mode.")
     self.oSocket = self.__getConnection()
@@ -57,6 +67,7 @@ class SSLTransport(BaseTransport):
     return S_OK()
 
   def initAsServer(self):
+    """ Prepare this server socket for use. """
     if not self.serverMode():
       raise RuntimeError("SSLTransport is in client mode.")
     self.oSocket = self.__getConnection()
@@ -86,6 +97,9 @@ class SSLTransport(BaseTransport):
     return S_OK()
 
   def handshake(self):
+    """ Used to perform SSL handshakes.
+        These are now done automatically.
+    """
     # This isn't used any more, the handshake is done inside the M2Crypto library
     return S_OK()
 
@@ -112,8 +126,10 @@ class SSLTransport(BaseTransport):
     return S_OK(self.oSocket.write(bufOut))
 
 def checkSanity(urlTuple, kwargs):
+  # TODO: Implement this
   pass
 
 def delegate(delegationRequest, kwargs):
+  # TODO: Implement this
   pass
 
