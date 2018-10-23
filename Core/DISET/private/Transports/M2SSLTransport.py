@@ -65,7 +65,7 @@ class SSLTransport(BaseTransport):
       param = 1
     else:
       param = 0
-    self.oSocket.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, param)
+    self.oSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, param)
     self.oSocket.bind(self.stServerAddress)
     self.oSocket.listen(self.iListenQueueSize)
     return S_OK()
