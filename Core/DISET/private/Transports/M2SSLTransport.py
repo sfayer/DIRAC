@@ -6,6 +6,7 @@ M2Crypto SSLTransport Library
 __RCSID__ = "$Id$"
 
 import os
+import socket
 from M2Crypto import SSL, threading as M2Threading
 
 from DIRAC.Core.Security import Locations
@@ -23,6 +24,8 @@ M2Threading.init()
 # TODO: CRL checking, another item that will need support in M2Crypto to work
 # properly. This probably involves mapping quite a few functions through.
 
+# TODO: IPv6 Support, the Connection object accepts a family parameter, so that
+# should be moderately straight-forward
 
 class SSLTransport(BaseTransport):
   """ SSL Transport implementaiton using the M2Crypto library. """
@@ -49,7 +52,12 @@ class SSLTransport(BaseTransport):
     if not self.serverMode():
       raise RuntimeError("SSLTransport is in client mode.")
     self.oSocket = SSL.Connection(self.__ctx)
-    # TODO: Process bAllowReuseAddress here!
+    # Make sure reuse address is set correctly
+    if self.bAllowReuseAddress:
+      param = 1
+    else:
+      param = 0
+    self.oSocket.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, param)
     self.oSocket.bind(self.stServerAddress)
     self.oSocket.listen(self.iListenQueueSize)
     return S_OK()
