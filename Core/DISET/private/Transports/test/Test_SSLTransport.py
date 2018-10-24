@@ -13,6 +13,19 @@ from DIRAC.Core.Security.test.x509TestUtilities import CERTDIR, USERCERT, getCer
 from DIRAC.ConfigurationSystem.Client.ConfigurationData import gConfigurationData
 from DIRAC.Core.DISET.private.Transports import PlainTransport, GSISSLTransport, M2SSLTransport
 
+# TODO: Interop test
+# TODO: Expired hostcert
+# TODO: Expired usercert
+# TODO: Expired proxy
+# TODO: Invalid/missing CA
+# TODO: Connect Timeouts
+# TODO: SSL Algorithms & Ciphers
+# TODO: Missing hostcert
+# TODO: Missing usercert
+# TODO: Missing proxy
+# TODO: Session test?
+# TODO: Reload of CAs?
+
 # Define all the locations
 caLocation = os.path.join(CERTDIR, 'ca')
 hostCertLocation = os.path.join(CERTDIR, 'host/hostcert.pem')
@@ -22,7 +35,6 @@ gConfigurationData.setOptionInCFG('/DIRAC/Security/CertFile', hostCertLocation)
 gConfigurationData.setOptionInCFG('/DIRAC/Security/KeyFile', hostKeyLocation)
 
 proxyFile = os.path.join(os.path.dirname(__file__), 'proxy.pem')
-
 
 
 MAGIC_QUESTION = "Who let the dog out"

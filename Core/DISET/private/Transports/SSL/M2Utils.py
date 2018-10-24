@@ -3,47 +3,77 @@
 Utilities for using M2Crypto SSL with DIRAC.
 """
 
-from M2Crypto import SSL
+import os
+from M2Crypto import SSL, m2
 
 from DIRAC.Core.Security import Locations
 from DIRAC.Core.Security.m2crypto.X509Chain import X509Chain
 
 # Default ciphers to use if unspecified
-DEFAULT_SSL_CIPHERS = "ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS"
+# TODO: RSA shouldn't be enabled here
+DEFAULT_SSL_CIPHERS = "HIGH:MEDIUM:RSA:!3DES:!RC4:!aNULL:!MD5:!SEED:!IDEA"
 # Verify depth of peer certs
 VERIFY_DEPTH = 50
 
-# TODO: Error handling in Context config functions...
 def __loadM2SSLCTXHostcert(ctx):
+  """ Load hostcert & key from the default location and set them as the
+      credentials for SSL context ctx.
+      Returns None.
+  """
   certKeyTuple = Locations.getHostCertificateAndKeyLocation()
   if not certKeyTuple:
-    raise RuntimeError("Hostcert/key location not found")
-  ctx.load_cert(certKeyTuple[0], certKeyTuple[1], callback=lambda: "")
+    raise RuntimeError("Hostcert/key location not set")
+  hostcert, hostkey = certKeyTuple
+  if not os.path.isfile(hostcert):
+    raise RuntimeError("Hostcert file (%s) is missing" % hostcert)
+  if not os.path.isfile(hostkey):
+    raise RuntimeError("Hostkey file (%s) is missing" % hostkey)
+  # Make sure we never stall on a password prompt if the hostkey has a password
+  # by specifying a blank string.
+  ctx.load_cert(hostcert, hostkey, callback=lambda: "")
 
 def __loadM2SSLCTXProxy(ctx, proxyPath=None):
+  """ Load proxy from proxyPath (or default location if not specified) and
+      set it as the certificate & key to use for this SSL context.
+      Returns None.
+  """
   if not proxyPath:
     proxyPath = Locations.getProxyLocation()
   if not proxyPath:
-    raise RuntimeError("Proxy location not found")
+    raise RuntimeError("Proxy location not set")
+  if not os.path.isfile(proxyPath):
+    raise RuntimeError("Proxy file (%s) is missing" % proxyPath)
+  # See __loadM2SSLCTXHostcert for description of why lambda is needed.
   ctx.load_cert_chain(proxyPath, proxyPath, callback=lambda: "")
 
-def getM2SSLContext(**kwargs):
+def getM2SSLContext(ctx=None, **kwargs):
   """ Gets an M2Crypto.SSL.Context configured using the standard
       DIRAC connection keywords from kwargs. The keywords are:
-        - 
-      Returns the new context.
+        - clientMode: Boolean, if False hostcerts are always used. If True
+                               a proxy is used unless other flags are set.
+        - useCertificates: Boolean, Set to true to use hostcerts in client
+                           mode.
+        - proxyString: String, no-longer supported, used to allow a literal
+                               proxy string to be provided.
+        - proxyLocation: String, Path to file to use as proxy, defaults to
+                                 usual location(s) if not set.
+        - skipCACheck: Boolean, if True, don't verify peer certificates.
+        - sslMethod: String, List of SSL algorithms to enable in OpenSSL style
+                              cipher format, e.g. "SSLv3:TLSv1".
+        - sslCiphers: String, OpenSSL style cipher string of ciphers to allow
+                              on this connection.
+      If an existing context "ctx" is provided, it is just reconfigured with
+      the selected arguments.
+
+      Returns the new or updated context.
   """
-  # TODO: Session support
-  print kwargs
-  ctx = SSL.Context()
+  if not ctx:
+    ctx = SSL.Context()
 
   # Set certificates for connection
-  if kwargs.get('clientMode', False):
+  if kwargs.get('clientMode', False) and not kwargs.get('useCertificates', False):
     # Client mode has a choice of possible options
-    if kwargs.get('useCertificates', False):
-      # Use hostcert
-      __loadM2SSLCTXHostcert(ctx)
-    elif kwargs.get('proxyString', None):
+    if kwargs.get('proxyString', None):
       # We don't support this any more, there is no easy way
       # to convert a proxy string to something usable by M2Crypto SSL
       # Try writing it to a temp file and use proxyLocation instead?
@@ -65,12 +95,26 @@ def getM2SSLContext(**kwargs):
     # Set CA location
     caPath = Locations.getCAsLocation()
     if not caPath:
-      raise RuntimeError("Failed to find CA location.")
+      raise RuntimeError("Failed to find CA location")
+    if not os.path.isdir(caPath):
+      raise RuntimeError("CA path (%s) is not a valid directory" % caPath)
     ctx.load_verify_locations(capath=caPath)
 
   # Other parameters
-  # TODO: sslMethod
-  #sslMethod = kwargs.get('sslMethod', "ALL"):
+  sslMethod = kwargs.get('sslMethod', None)
+  if sslMethod:
+    # Pylint can't see the m2 constants due to the way the library is loaded
+    # We just have to disable that warning for the next bit...
+    # pylint: disable=no-member
+    methods = [('SSLv2', m2.SSL_OP_NO_SSLv2),
+               ('SSLv3', m2.SSL_OP_NO_SSLv3),
+               ('TLSv1', m2.SSL_OP_NO_TLSv1)]
+    allowed_methods = sslMethod.split(':')
+    # If a method isn't explicitly allowed, set the flag to disable it...
+    for method, method_flag in methods:
+      if method not in allowed_methods:
+        ctx.set_options(method_flag)
+    # SSL_OP_NO_SSLv2, SSL_OP_NO_SSLv3, SSL_OP_NO_TLSv1
   ciphers = kwargs.get('sslCiphers', DEFAULT_SSL_CIPHERS)
   ctx.set_cipher_list(ciphers)
   return ctx
@@ -102,4 +146,3 @@ def getM2PeerInfo(conn):
     raise RuntimeError("Failed to get SSL peer isProxy (%s)." % isLimited['Message'])
   peer['isLimitedProxy'] = isLimited['Value']
   return peer
-
