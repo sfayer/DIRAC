@@ -190,7 +190,6 @@ class BaseTransport( object ):
       #While not found the message length or the ka, keep receiving
       while iSeparatorPosition == -1 and not isKeepAlive:
         retVal = self._read( 16384 )
-        print "CHRIS receive data retVal %s"%retVal
         # import ipdb; ipdb.set_trace
         #If error return
         if not retVal[ 'OK' ]:
@@ -208,12 +207,10 @@ class BaseTransport( object ):
           return S_ERROR( "Read limit exceeded (%s chars)" % maxBufferSize )
       #Keep alive magic!
       if isKeepAlive:
-        print "CHRIS KEEP ALIVE !"
         gLogger.debug( "Received keep alive header" )
         #Remove the ka magic from the buffer and process the keep alive
         self.byteStream = self.byteStream[ keepAliveMagicLen: ]
         return self.__processKeepAlive( maxBufferSize, blockAfterKeepAlive )
-      print "CHRIS IT IS A REAL MESSAGE"
       #From here it must be a real message!
       #Process the size and remove the msg length from the bytestream
       pkgSize = int( self.byteStream[ :iSeparatorPosition ] )
