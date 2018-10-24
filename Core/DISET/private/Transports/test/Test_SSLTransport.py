@@ -13,7 +13,6 @@ from DIRAC.Core.Security.test.x509TestUtilities import CERTDIR, USERCERT, getCer
 from DIRAC.ConfigurationSystem.Client.ConfigurationData import gConfigurationData
 from DIRAC.Core.DISET.private.Transports import PlainTransport, GSISSLTransport, M2SSLTransport
 
-# TODO: Interop test
 # TODO: Expired hostcert
 # TODO: Expired usercert
 # TODO: Expired proxy
@@ -40,16 +39,17 @@ proxyFile = os.path.join(os.path.dirname(__file__), 'proxy.pem')
 MAGIC_QUESTION = "Who let the dog out"
 MAGIC_ANSWER = "Who, Who, who ?"
 
+PORT_NUMBER = 50000
 
-PORT_NUMBER = 1234
-
-TRANSPORTTYPES = (PlainTransport.PlainTransport,
-                  M2SSLTransport.SSLTransport,
-                  GSISSLTransport.SSLTransport)
-# TRANSPORTTYPES = (SSLTransport.SSLTransport, )
-# TRANSPORTTYPES = (M2SSLTransport.SSLTransport, )
-# TRANSPORTTYPES = (GSISSLTransport.SSLTransport, )
-
+# Transports are now tested in pairs:
+# "Server-Client"
+# This allows for interoperatbility tests between GSI and M2 versions.
+# Each pair is defined as a string.
+TRANSPORTTESTS = ("Plain-Plain",
+                  "M2-M2",
+                  "M2-GSI",
+                  "GSI-GSI",
+                  "GSI-M2")
 
 
 # https://www.ibm.com/developerworks/linux/library/l-openssl/index.html
@@ -100,7 +100,7 @@ class DummyServiceReactor(object):
     res = self.transport.initAsServer()
     assert res['OK']
 
-  def __acceptIncomingConnection(self, ):
+  def __acceptIncomingConnection(self):
     """
       This method just gets the incoming connection, and handle it, once.
     """
@@ -120,39 +120,45 @@ class DummyServiceReactor(object):
     """ Close the connection """
     self.transport.close()
 
+def transportByName(transport):
+  """ A helper function to get a transport class by 'friendly' name. """
+  if transport.lower() == "plain":
+    return PlainTransport.PlainTransport
+  elif transport.lower() == "m2":
+    return M2SSLTransport.SSLTransport
+  elif transport.lower() == "gsi":
+    return GSISSLTransport.SSLTransport
+  raise RuntimeError("Unknown Transport Name: %s" % transport)
 
-@fixture(scope="function", params=TRANSPORTTYPES)
+
+@fixture(scope="function", params=TRANSPORTTESTS)
 def create_serverAndClient(request):
   """ This function starts a server, and closes it after
     The server will use the parametrized transport type
   """
+  testStr = request.param
+  serverName, clientName = testStr.split("-")
+  serverClass = transportByName(serverName)
+  clientClass = transportByName(clientName)
 
-  transportObject = request.param
-
-  sr = DummyServiceReactor(transportObject, PORT_NUMBER)
+  sr = DummyServiceReactor(serverClass, PORT_NUMBER)
   server_thread = threading.Thread(target=sr.serve)
   server_thread.start()
+  time.sleep(0.1) # Give the server thread time to start
 
   # Create the client
   clientOptions = {'clientMode': True,
                    'proxyLocation': proxyFile,
                   }
-
-  time.sleep(1)
-
-
-  clientTransport = transportObject(("localhost", PORT_NUMBER), bServerMode=False, **clientOptions)
+  clientTransport = clientClass(("localhost", PORT_NUMBER), bServerMode=False, **clientOptions)
   res = clientTransport.initAsClient()
   assert res['OK'], res
 
   yield sr, clientTransport
 
-
   clientTransport.close()
   sr.closeListeningConnections()
   server_thread.join()
-  time.sleep(1)
-
 
 def ping_server(clientTransport):
   """ This sends a message to the server and expects an answer
