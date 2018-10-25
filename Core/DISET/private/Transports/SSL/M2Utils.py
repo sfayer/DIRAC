@@ -10,8 +10,9 @@ from DIRAC.Core.Security import Locations
 from DIRAC.Core.Security.m2crypto.X509Chain import X509Chain
 
 # Default ciphers to use if unspecified
-# TODO: RSA shouldn't be enabled here
-DEFAULT_SSL_CIPHERS = "HIGH:MEDIUM:RSA:!3DES:!RC4:!aNULL:!MD5:!SEED:!IDEA"
+# Cipher line should be as readable as possible, sorry pylint
+# pylint: disable=line-too-long
+DEFAULT_SSL_CIPHERS = "AES256-GCM-SHA384:AES256-SHA256:AES256-SHA:CAMELLIA256-SHA:AES128-GCM-SHA256:AES128-SHA256:AES128-SHA:HIGH:MEDIUM:RSA:!3DES:!RC4:!aNULL:!MD5:!SEED:!IDEA"
 # Verify depth of peer certs
 VERIFY_DEPTH = 50
 
