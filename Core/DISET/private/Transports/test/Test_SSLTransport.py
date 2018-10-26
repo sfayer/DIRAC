@@ -3,7 +3,6 @@
 import os
 import select
 import socket
-import time
 import threading
 
 from pytest import fixture
@@ -64,7 +63,7 @@ class DummyServiceReactor(object):
         :param transportObject: type of TransportObject we will use
         :param port: port to listen to
     """
-
+    self.__prepared = False
     self.port = port
     self.transportObject = transportObject
 
@@ -88,10 +87,15 @@ class DummyServiceReactor(object):
     clientTransport.sendData(MAGIC_ANSWER)
     clientTransport.close()
 
-  def serve(self):
-    """ Create the listener, and listen """
+  def prepare(self):
+    """ Start listening """
+    if not self.__prepared:
+      self.__createListeners()
+    self.__prepared = True
 
-    self.__createListeners()
+  def serve(self):
+    """ Wait for connections and handle the first one. """
+    self.prepare()
     self.__acceptIncomingConnection()
 
   def __createListeners(self):
@@ -143,8 +147,8 @@ def create_serverAndClient(request):
 
   sr = DummyServiceReactor(serverClass, PORT_NUMBER)
   server_thread = threading.Thread(target=sr.serve)
+  sr.prepare()
   server_thread.start()
-  time.sleep(0.1) # Give the server thread time to start
 
   # Create the client
   clientOptions = {'clientMode': True,
