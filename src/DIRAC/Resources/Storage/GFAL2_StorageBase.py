@@ -890,8 +890,9 @@ class GFAL2_StorageBase(StorageBase):
 
         log = self.log.getLocalSubLogger("GFAL2_StorageBase._createSingleDirectory")
         try:
-            log.debug(f"Creating {path}")
-            self.ctx.mkdir_rec(path, 0o755)
+            perm = int(self._allProtocolParameters.get("DirPerm", "755"), base=8)
+            log.debug(f"Creating {path} with perm {perm:04o}")
+            self.ctx.mkdir_rec(path, perm)
 
             log.debug("Successfully created directory")
             return True
