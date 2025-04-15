@@ -21,6 +21,7 @@ from pathlib import Path
 
 import DIRAC
 from DIRAC import S_ERROR, S_OK, gConfig, gLogger
+from DIRAC.Core.Utilities.CGroups2 import CG2Manager
 from DIRAC.ConfigurationSystem.Client.Helpers import Operations
 from DIRAC.Core.Utilities.CGroups2 import CG2Manager
 from DIRAC.Core.Utilities.ThreadScheduler import gThreadScheduler
