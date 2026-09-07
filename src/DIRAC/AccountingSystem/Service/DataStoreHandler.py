@@ -28,7 +28,7 @@ class DataStoreHandler(RequestHandler):
     @classmethod
     def initializeHandler(cls, svcInfoDict):
         multiPath = PathFinder.getDatabaseSection("Accounting/MultiDB")
-        # we can focus on only some of the accoutning type
+        # we can focus on only some of the accounting type
         cls.accounting_types = getServiceOption(svcInfoDict, "AccountingTypes", [])
 
         cls.__acDB = MultiAccountingDB(multiPath, accounting_types=cls.accounting_types)
