@@ -65,7 +65,7 @@ class ProdTransManager:
 
         stepDesc = prodStep[2]
         stepLongDesc = prodStep[3]
-        stepBody = prodStep[4]
+        stepBody = json.loads(prodStep[4])
         stepType = prodStep[5]
         stepPlugin = prodStep[6]
         stepAgentType = prodStep[7]
