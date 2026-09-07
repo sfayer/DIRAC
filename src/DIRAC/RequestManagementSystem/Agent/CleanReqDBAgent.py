@@ -8,7 +8,6 @@
 
 """
 
-
 # # imports
 import datetime
 
@@ -76,7 +75,7 @@ class CleanReqDBAgent(AgentModule):
 
         if self.ACCOUNTING_BATCH_MAX_REQUESTS:
             self.log.info(f"Accounting max requests = {self.ACCOUNTING_BATCH_MAX_REQUESTS} request/cycle")
-            self.log.info(f"Accouting batch size = {self.ACCOUNTING_BATCH_SIZE} requests")
+            self.log.info(f"Accounting batch size = {self.ACCOUNTING_BATCH_SIZE} requests")
 
         if self.cancelGraceDays >= self.DEL_GRACE_DAYS:
             self.cancelGraceDays = self.DEL_GRACE_DAYS - 1
